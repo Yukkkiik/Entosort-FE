@@ -4,13 +4,12 @@ import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
-  ScanSearch,
   BarChart3,
   Sliders,
   Settings,
-  Bell,
   LogOut,
   Leaf,
+  User
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -46,23 +45,26 @@ const NAV_ITEMS: NavItem[] = [
   {
     id: "reports",
     icon: <BarChart3 size={18} strokeWidth={2} />,
-    label: "Reports",
+    label: "Riwayat & Laporan",
     href:"/dashboard/reports"
+  },
+  {
+    id: "Manajemen Pengguna",
+    icon: <User size={18} strokeWidth={2} />,
+    label: "User",
+    href:"/dashboard/user"
+  },
+  {
+    id: "Kalibrasi & Parameter Sistem",
+    icon: <Settings size={18} strokeWidth={2} />,
+    label: "Kalibrasi & Parameter Sistem",
+    badge: 2,
+    href:"/dashboard/calibration"
   },
 ];
 
 const BOTTOM_ITEMS: NavItem[] = [
-  {
-    id: "settings",
-    icon: <Settings size={18} strokeWidth={2} />,
-    label: "Settings",
-  },
-  {
-    id: "notifications",
-    icon: <Bell size={18} strokeWidth={2} />,
-    label: "Notifications",
-    badge: 2,
-  },
+  
 ];
 
 // ─── NavButton ────────────────────────────────────────────────────────────────

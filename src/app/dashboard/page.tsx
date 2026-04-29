@@ -152,6 +152,7 @@ export default function DashboardPage() {
 
             {/* ── Header ── */}
             <PageHeader
+              titleIcon="🖥️"
               title="Live Monitoring"
               subtitle="EntoSort AI · BSF Larva Sorting System"
               breadcrumbs={[{ label: "EntoSort" }, { label: "Dashboard" }]}

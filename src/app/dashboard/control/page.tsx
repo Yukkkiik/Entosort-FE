@@ -117,7 +117,7 @@ export default function ControlPage() {
 
         .page-root {
           font-family: 'DM Sans', system-ui, sans-serif;
-          background: #f3f4f6;
+          background: #f4f5f7; /* Disamakan dengan dashboard-root */
           min-height: 100vh;
         }
       `}</style>
@@ -136,10 +136,11 @@ export default function ControlPage() {
 
         {/* ── Main content ── */}
         <main
-          className="relative z-10 min-h-screen"
+          className="relative z-10 min-h-screen flex flex-col justify-between"
           style={{ paddingLeft: "calc(68px + 2rem)" }}
         >
-          <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-8 pb-20">
+          {/* DI SINI PERUBAHAN UKURANNYA: max-w-[1280px] dan px-6 */}
+          <div className="max-w-[1280px] w-full mx-auto px-6 py-8 pb-16 flex-1">
 
             {/* ── Page Header ── */}
             <PageHeader
@@ -239,9 +240,9 @@ export default function ControlPage() {
           </div>
 
           {/* ── Footer ── */}
-          <footer className="border-t border-gray-200/60 bg-white/70 backdrop-blur-sm px-6 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
+          <footer className="border-t border-gray-100 bg-white/60 backdrop-blur-sm px-8 py-4 flex items-center justify-between mt-auto">
             <p className="text-[11px] text-gray-400 font-medium">
-              © 2025 <span className="font-bold text-gray-600">EntoSort</span> · Manual Control Module
+              © 2026 <span className="font-bold text-gray-600">EntoSort</span> · Manual Control Module
             </p>
             <p className="text-[11px] text-gray-400 font-mono hidden sm:block">
               IoT Gateway · v2.4.1 · Edge Runtime
