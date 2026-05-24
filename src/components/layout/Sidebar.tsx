@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
@@ -9,10 +9,11 @@ import {
   Settings,
   LogOut,
   Leaf,
-  User
+  User,
 } from "lucide-react";
+import { useCurrentUser, useLogout } from "@/hooks/useAuth";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+export type UserRole = "admin" | "peternak";
 
 interface NavItem {
   id: string;
@@ -20,51 +21,50 @@ interface NavItem {
   label: string;
   href?: string;
   badge?: number;
+  roles: UserRole[];
 }
 
 interface SidebarProps {
-  activeItem?: string;
   onNavChange?: (id: string) => void;
 }
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-
-const NAV_ITEMS: NavItem[] = [
+const ALL_NAV_ITEMS: NavItem[] = [
   {
     id: "dashboard",
     icon: <LayoutDashboard size={18} strokeWidth={2} />,
     label: "Dashboard",
     href: "/dashboard",
+    roles: ["admin", "peternak"],
   },
   {
     id: "control",
     icon: <Sliders size={18} strokeWidth={2} />,
     label: "Manual Control",
     href: "/dashboard/control",
+    roles: ["admin", "peternak"],
   },
   {
     id: "reports",
     icon: <BarChart3 size={18} strokeWidth={2} />,
     label: "Riwayat & Laporan",
-    href:"/dashboard/reports"
+    href: "/dashboard/reports",
+    roles: ["admin", "peternak"],
   },
   {
-    id: "Manajemen Pengguna",
+    id: "user",
     icon: <User size={18} strokeWidth={2} />,
-    label: "User",
-    href:"/dashboard/user"
+    label: "Manajemen Pengguna",
+    href: "/dashboard/user",
+    roles: ["admin"],
   },
   {
-    id: "Kalibrasi & Parameter Sistem",
+    id: "calibration",
     icon: <Settings size={18} strokeWidth={2} />,
     label: "Kalibrasi & Parameter Sistem",
+    href: "/dashboard/calibration",
     badge: 2,
-    href:"/dashboard/calibration"
+    roles: ["admin"],
   },
-];
-
-const BOTTOM_ITEMS: NavItem[] = [
-  
 ];
 
 // ─── NavButton ────────────────────────────────────────────────────────────────
@@ -128,27 +128,57 @@ function NavButton({
   );
 }
 
+// ─── Role Badge ───────────────────────────────────────────────────────────────
+
+function RoleBadge({ role }: { role: UserRole }) {
+  const isAdmin = role === "admin";
+  return (
+    <div
+      title={isAdmin ? "Admin" : "Peternak"}
+      className={`
+        w-11 h-5 rounded-full flex items-center justify-center
+        text-[9px] font-bold tracking-wider uppercase
+        ${isAdmin ? "bg-violet-100 text-violet-600" : "bg-lime-100 text-lime-700"}
+      `}
+    >
+      {isAdmin ? "Admin" : "Peternak"}
+    </div>
+  );
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-export default function Sidebar({ activeItem, onNavChange }: SidebarProps) {
+export default function Sidebar({ onNavChange }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { role } = useCurrentUser();
+  const logout = useLogout();
 
-  const resolveActive = (): string => {
-    if (activeItem) return activeItem;
-    const all = [...NAV_ITEMS, ...BOTTOM_ITEMS];
-    const exact = all.find((i) => i.href === pathname);
+  const currentRole: UserRole = role ?? "peternak";
+
+  const navItems = useMemo(
+    () => ALL_NAV_ITEMS.filter((item) => item.roles.includes(currentRole)),
+    [currentRole]
+  );
+
+  // ← active sekarang dihitung dari pathname secara reaktif
+  // tidak pakai useState supaya selalu sinkron dengan URL
+  const active = useMemo(() => {
+    // exact match dulu
+    const exact = navItems.find((i) => i.href === pathname);
     if (exact) return exact.id;
-    const partial = all.find(
-      (i) => i.href && pathname.startsWith(i.href) && i.href !== "/"
-    );
-    return partial?.id ?? "dashboard";
-  };
 
-  const [active, setActive] = useState<string>(resolveActive);
+    // partial match — cari path paling spesifik yang cocok
+    const partial = navItems
+      .filter((i) => i.href && i.href !== "/dashboard" && pathname.startsWith(i.href))
+      .sort((a, b) => (b.href?.length ?? 0) - (a.href?.length ?? 0))[0];
+    if (partial) return partial.id;
+
+    // fallback ke dashboard
+    return "dashboard";
+  }, [pathname, navItems]);
 
   const handleNav = (item: NavItem) => {
-    setActive(item.id);
     onNavChange?.(item.id);
     if (item.href) router.push(item.href);
   };
@@ -166,7 +196,7 @@ export default function Sidebar({ activeItem, onNavChange }: SidebarProps) {
       "
     >
       {/* Logo */}
-      <div className="relative mb-3">
+      <div className="relative mb-1">
         <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#a3e635] to-[#4d7c0f] flex items-center justify-center shadow-lg shadow-lime-300/40">
           <Leaf size={19} className="text-white" strokeWidth={2.5} />
         </div>
@@ -175,10 +205,12 @@ export default function Sidebar({ activeItem, onNavChange }: SidebarProps) {
         </span>
       </div>
 
-      <div className="w-6 h-px bg-gray-100 mb-1" />
+      <RoleBadge role={currentRole} />
+
+      <div className="w-6 h-px bg-gray-100 my-1" />
 
       <nav className="flex flex-col gap-2.5" aria-label="Main navigation">
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <NavButton
             key={item.id}
             item={item}
@@ -191,19 +223,9 @@ export default function Sidebar({ activeItem, onNavChange }: SidebarProps) {
       <div className="flex-1" />
       <div className="w-6 h-px bg-gray-100 mb-1" />
 
-      <nav className="flex flex-col gap-2.5" aria-label="Secondary navigation">
-        {BOTTOM_ITEMS.map((item) => (
-          <NavButton
-            key={item.id}
-            item={item}
-            isActive={active === item.id}
-            onClick={() => handleNav(item)}
-          />
-        ))}
-      </nav>
-
       <button
         aria-label="Log out"
+        onClick={() => logout.mutate()}
         className="
           mt-2 w-11 h-11 rounded-2xl bg-white/70 text-gray-300
           hover:bg-rose-50 hover:text-rose-400 border border-transparent

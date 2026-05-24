@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -353,15 +354,15 @@ const teamSection = { ref: undefined, inView: true };
 
           {/* CTA + Hamburger */}
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => handleNav("#features")}
+            <Link
+              href='/login'
               className="hidden md:flex items-center gap-2 px-5 py-2.5 rounded-xl bg-lime-400 text-black text-sm font-bold hover:bg-lime-300 active:scale-95 transition-all duration-200 glow-lime"
             >
               Get Started
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5-5 5M6 12h12" />
               </svg>
-            </button>
+            </Link>
             <button
               className="md:hidden w-10 h-10 flex flex-col items-center justify-center gap-1.5 rounded-lg glass"
               onClick={() => setMenuOpen(!menuOpen)}
