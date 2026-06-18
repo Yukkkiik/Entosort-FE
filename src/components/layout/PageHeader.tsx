@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { ChevronRight, Loader2, Wifi, WifiOff } from "lucide-react";
-import { useNodes, useNodeStatus } from "@/hooks/useNode";
+import { useUnits, useUnitStatus } from "@/hooks/useUnit";
 import { useAuthStore } from "@/lib/authStore";
 import type { PageHeaderProps, SystemStatus } from "@/types/node";
 
@@ -46,14 +46,13 @@ const STATUS_CFG: Record<
   },
 };
 
-// ─── NodeSummaryBadge — ditampilkan ketika tidak ada nodeId spesifik ──────────
-// Menampilkan berapa node online dari total milik user
+// ─── UnitSummaryBadge ─────────────────────────────────────────────────────────
+// Menampilkan berapa unit online dari total milik user (untuk peternak)
 
-function NodeSummaryBadge() {
-  const { total, online, isLoading } = useNodes(30_000);
+function UnitSummaryBadge() {
+  const { total, online, isLoading } = useUnits(30_000);
   const user = useAuthStore((s) => s.user);
 
-  // Admin tidak perlu lihat summary node di PageHeader
   if (user?.role === "admin") return null;
 
   if (isLoading) {
@@ -84,7 +83,7 @@ function NodeSummaryBadge() {
         <span className={`relative w-2 h-2 rounded-full ${s.dot}`} />
       </span>
       <span>{s.icon}</span>
-      {allOffline ? "Semua Node Offline" : `${online} / ${total} Node Online`}
+      {allOffline ? "Semua Unit Offline" : `${online} / ${total} Unit Online`}
     </div>
   );
 }
@@ -97,7 +96,7 @@ export default function PageHeader({
   titleIcon,
   breadcrumbs = [],
   status: staticStatus = "online",
-  nodeId,
+  unitId,
   pollInterval = 30_000,
   actions,
   animationDelay = 0,
@@ -106,11 +105,20 @@ export default function PageHeader({
   const user = useAuthStore((s) => s.user);
   const isPeternak = user?.role === "peternak";
 
-  // Jika ada nodeId spesifik → poll status satu node
-  const { status: dynamicStatus, lastSeen } = useNodeStatus(nodeId, pollInterval);
+  // Jika ada unitId spesifik → poll status satu unit
+  const { status: dynamicStatus, unit } = useUnitStatus(unitId, pollInterval);
 
-  const status: SystemStatus = nodeId ? dynamicStatus : staticStatus;
+  const status: SystemStatus = unitId
+    ? (dynamicStatus as SystemStatus)
+    : staticStatus;
   const s = STATUS_CFG[status];
+
+  // Ambil lastSeen dari node manapun yang paling baru
+  const lastSeen = unit?.nodes?.reduce<string | null>((latest, node) => {
+    if (!node.lastSeen) return latest;
+    if (!latest) return node.lastSeen;
+    return new Date(node.lastSeen) > new Date(latest) ? node.lastSeen : latest;
+  }, null) ?? null;
 
   const lastSeenText = lastSeen
     ? `Last seen: ${new Date(lastSeen).toLocaleTimeString("id-ID", {
@@ -195,14 +203,13 @@ export default function PageHeader({
             </p>
           )}
 
-          {/* 
+          {/*
             ── Status badge — hanya untuk peternak ────────────────
-            Admin tidak perlu lihat status node di PageHeader
-            1. Ada nodeId  → status node spesifik (misal halaman detail)
-            2. Tidak ada   → ringkasan semua node milik peternak
+            1. Ada unitId  → status unit spesifik (halaman detail)
+            2. Tidak ada   → ringkasan semua unit milik peternak
           */}
           {isPeternak && (
-            nodeId ? (
+            unitId ? (
               <div
                 className={`mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold ${s.pill} ${s.text}`}
               >
@@ -223,7 +230,7 @@ export default function PageHeader({
                 )}
               </div>
             ) : (
-              <NodeSummaryBadge />
+              <UnitSummaryBadge />
             )
           )}
         </div>
@@ -244,7 +251,7 @@ export default function PageHeader({
 
           {actions && (
             <>
-              <div className="w-px h-10 bg-gray-100 hidden sm:block" />
+              <div className="w-px h-12 bg-gray-100 hidden sm:block" />
               <div className="flex items-center gap-2">{actions}</div>
             </>
           )}

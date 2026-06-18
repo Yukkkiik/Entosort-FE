@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useCurrentUser, useLogout } from "@/hooks/useAuth";
 
-export type UserRole = "admin" | "peternak";
+export type UserRole = "superadmin"|"admin" | "peternak";
 
 interface NavItem {
   id: string;
@@ -55,7 +55,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
     icon: <User size={18} strokeWidth={2} />,
     label: "Manajemen Pengguna",
     href: "/dashboard/user",
-    roles: ["admin"],
+    roles: ["superadmin","admin"],
   },
   {
     id: "calibration",
@@ -64,6 +64,13 @@ const ALL_NAV_ITEMS: NavItem[] = [
     href: "/dashboard/calibration",
     badge: 2,
     roles: ["admin"],
+  },
+ {
+  id: "units",
+  icon: <Settings size={18} strokeWidth={2} />,
+  label: "Kalibrasi & Parameter Sistem",
+  href: "/dashboard/units",
+  roles: ["superadmin"],
   },
 ];
 
@@ -131,17 +138,24 @@ function NavButton({
 // ─── Role Badge ───────────────────────────────────────────────────────────────
 
 function RoleBadge({ role }: { role: UserRole }) {
-  const isAdmin = role === "admin";
+  const config = {
+    superadmin: { label: "Superadmin", className: "bg-violet-100 text-violet-600" },
+    admin:      { label: "Admin",      className: "bg-blue-100 text-blue-600"     },
+    peternak:   { label: "Peternak",   className: "bg-lime-100 text-lime-700"     },
+  };
+
+  const { label, className } = config[role] ?? config.peternak;
+
   return (
     <div
-      title={isAdmin ? "Admin" : "Peternak"}
+      title={label}
       className={`
         w-11 h-5 rounded-full flex items-center justify-center
         text-[9px] font-bold tracking-wider uppercase
-        ${isAdmin ? "bg-violet-100 text-violet-600" : "bg-lime-100 text-lime-700"}
+        ${className}
       `}
     >
-      {isAdmin ? "Admin" : "Peternak"}
+      {label}
     </div>
   );
 }

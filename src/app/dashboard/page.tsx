@@ -3,6 +3,7 @@
 import CameraPreview from "@/components/monitoring/CameraPreview";
 import MetricCard from "@/components/monitoring/MetricCard";
 import { useSetHeader } from "@/components/layout/HeaderContext";
+import RoleGuard  from "@/lib/RoleGuard"
 import {
   CheckCircle2,
   AlertCircle,
@@ -132,6 +133,7 @@ export default function DashboardPage() {
 
   return (
     <>
+    <RoleGuard allowedRoles={["admin", "peternak"]}>
       {/* ── Global font + animation injection ── */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800;900&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&display=swap');
@@ -178,11 +180,8 @@ export default function DashboardPage() {
           {/* ── Camera + right panel ── */}
           <div className="grid xl:grid-cols-[1fr_300px] gap-5 mb-5">
             {/* Camera */}
-            {/* <CameraPreview
-              temperature={28}
-              speed={15}
-              fps={30}
-            /> */}
+            <CameraPreview
+            />
 
             {/* Right panel: sort history */}
             <div
@@ -373,6 +372,7 @@ export default function DashboardPage() {
 
         </div>
       </div>
+      </RoleGuard>
     </>
   );
 }

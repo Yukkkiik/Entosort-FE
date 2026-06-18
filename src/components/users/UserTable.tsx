@@ -1,16 +1,17 @@
 "use client";
 
+// components/users/UserTable.tsx
 import { useState } from "react";
 import {
   Search, UserPlus, Pencil, Trash2,
   ChevronUp, ChevronDown, ChevronsUpDown,
-  X, Tractor, Loader2, Phone, Calendar, Cpu,
-  Wifi, WifiOff,
+  X, Tractor, Loader2, Phone, Calendar, Package,
+  Wifi, WifiOff, User,
 } from "lucide-react";
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@/hooks/useUsers";
-import { useCreateNode, useAssignNode } from "@/hooks/useNode";
+import { useAssignPeternak, useRemovePeternak, useAssignAdmin, useRemoveAdmin } from "@/hooks/useUnit";
+import { useCurrentUser } from "@/hooks/useAuth";
 import type { AppUser, CreateUserPayload, UpdateUserPayload } from "@/types/user";
-import type { NodeType } from "@/types/node";
 import { Avatar } from "./Avatar";
 import { UserFormPage } from "./UserFormPage";
 import { DeletePage } from "./DeletePage";
@@ -20,12 +21,6 @@ import { DeletePage } from "./DeletePage";
 type SortField = "username" | "phone";
 type SortDir   = "asc" | "desc" | null;
 type PageView  = "table" | "add" | "edit" | "delete";
-
-interface NewNodeEntry {
-  tempId:   string;
-  nodeId:   string;
-  nodeType: NodeType;
-}
 
 // ─── SortIcon ─────────────────────────────────────────────────────────────────
 
@@ -38,40 +33,66 @@ function SortIcon({ field, sortField, sortDir }: {
     : <ChevronDown size={11} className="text-green-600" />;
 }
 
-// ─── NodeBadge ────────────────────────────────────────────────────────────────
+// ─── UnitBadge ────────────────────────────────────────────────────────────────
+// Menampilkan info unit dari peternakUnit (1 unit) atau adminUnits (banyak unit)
 
-function NodeBadge({ nodes }: { nodes: AppUser["nodes"] }) {
-  const total   = nodes?.length ?? 0;
-  const online  = nodes?.filter((n) => n.status === "online").length ?? 0;
-  const offline = total - online;
-
-  if (total === 0) {
+function UnitBadge({ user, targetRole }: { user: AppUser; targetRole: "admin" | "peternak" }) {
+  if (targetRole === "peternak") {
+    const unit = user.peternakUnit;
+    if (!unit) {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg font-medium">
+          <Package size={11} />
+          Belum ada unit
+        </span>
+      );
+    }
+    const online  = unit.nodes.filter((n) => n.status === "online").length;
+    const offline = unit.nodes.length - online;
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg font-medium">
-        <Cpu size={11} />
-        Belum ada
-      </span>
+      <div className="flex flex-col gap-1">
+        <span className="inline-flex items-center gap-1.5 text-xs text-green-700 bg-green-50 border border-green-100 px-2.5 py-1 rounded-lg font-semibold w-fit">
+          <Package size={11} />
+          {unit.unitId}
+        </span>
+        <div className="flex items-center gap-2 pl-0.5">
+          {online > 0 && (
+            <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
+              <Wifi size={9} /> {online} online
+            </span>
+          )}
+          {offline > 0 && (
+            <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+              <WifiOff size={9} /> {offline} offline
+            </span>
+          )}
+        </div>
+      </div>
     );
   }
 
+  // Admin — adminUnits[]
+  const units = user.adminUnits ?? [];
+  if (units.length === 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg font-medium">
+        <Package size={11} />
+        Belum ada unit
+      </span>
+    );
+  }
   return (
     <div className="flex flex-col gap-1">
-      <span className="inline-flex items-center gap-1.5 text-xs text-green-700 bg-green-50 border border-green-100 px-2.5 py-1 rounded-lg font-semibold w-fit">
-        <Cpu size={11} />
-        {total} node
+      <span className="inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg font-semibold w-fit">
+        <Package size={11} />
+        {units.length} unit
       </span>
-      <div className="flex items-center gap-2 pl-0.5">
-        {online > 0 && (
-          <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
-            <Wifi size={9} />
-            {online} online
-          </span>
-        )}
-        {offline > 0 && (
-          <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
-            <WifiOff size={9} />
-            {offline} offline
-          </span>
+      <div className="flex flex-wrap gap-1 pl-0.5">
+        {units.slice(0, 2).map((u) => (
+          <span key={u.unitId} className="text-[10px] text-slate-500 font-mono">{u.unitId}</span>
+        ))}
+        {units.length > 2 && (
+          <span className="text-[10px] text-slate-400">+{units.length - 2} lainnya</span>
         )}
       </div>
     </div>
@@ -82,11 +103,15 @@ function NodeBadge({ nodes }: { nodes: AppUser["nodes"] }) {
 
 export default function UserTable() {
   const { data: allUsers = [], isLoading, isError } = useUsers();
-  const createUser    = useCreateUser();
-  const updateUser    = useUpdateUser();
-  const deleteUser    = useDeleteUser();
-  const createNode    = useCreateNode();
-  const assignNode    = useAssignNode();
+  const { role } = useCurrentUser();
+
+  const createUser     = useCreateUser();
+  const updateUser     = useUpdateUser();
+  const deleteUser     = useDeleteUser();
+  const assignPeternak = useAssignPeternak();
+  const removePeternak = useRemovePeternak();
+  const assignAdmin    = useAssignAdmin();
+  const removeAdmin    = useRemoveAdmin();
 
   const [view,       setView]       = useState<PageView>("table");
   const [activeUser, setActiveUser] = useState<AppUser | null>(null);
@@ -94,9 +119,17 @@ export default function UserTable() {
   const [sortField,  setSortField]  = useState<SortField | null>(null);
   const [sortDir,    setSortDir]    = useState<SortDir>(null);
 
-  const users = allUsers.filter((u) => u.role === "peternak");
+  // ── Filter berdasarkan role yang login ─────────────────────────────────────
 
-  // ── Sort ──────────────────────────────────────────────────────────────────
+  const targetRole  = role === "superadmin" ? "admin" : "peternak";
+  const entityLabel = role === "superadmin" ? "Admin" : "Peternak";
+
+  const users = allUsers.filter((u) => {
+    if (u.role !== targetRole) return false;
+    return true;
+  });
+
+  // ── Sort ───────────────────────────────────────────────────────────────────
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -120,63 +153,73 @@ export default function UserTable() {
       return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
     });
 
-  // ── Navigation ────────────────────────────────────────────────────────────
+  // ── Navigation ─────────────────────────────────────────────────────────────
 
   const goAdd    = ()           => { setActiveUser(null); setView("add"); };
   const goEdit   = (u: AppUser) => { setActiveUser(u);    setView("edit"); };
   const goDelete = (u: AppUser) => { setActiveUser(u);    setView("delete"); };
   const goTable  = ()           => { setActiveUser(null); setView("table"); };
 
-  // ── Submit dengan node assignment ─────────────────────────────────────────
+  // ── Submit ─────────────────────────────────────────────────────────────────
+  // Logika assign/remove unit dilakukan di sini berdasarkan diff selectedUnits
 
   const handleSubmit = async (
-    form:            { username: string; password?: string; phone: string },
-    existingNodeIds: string[],
-    newNodes:        NewNodeEntry[],
-  ) => {
+    form: { username: string; password: string; phone: string },
+    selectedUnits: string[],
+  ): Promise<void> => {
     let userId: number;
 
     if (activeUser) {
-      // ── Edit user ──────────────────────────────────────────────────────
       const payload: UpdateUserPayload = {
         username: form.username,
         phone:    form.phone,
-        role:     "peternak",
+        role:     targetRole,
       };
-      if (form.password?.trim()) payload.password = form.password;
+      if (form.password.trim()) payload.password = form.password;
+
       const updated = await updateUser.mutateAsync({ id: activeUser.id, payload });
       userId = updated.id;
     } else {
-      // ── Create user ────────────────────────────────────────────────────
       const created = await createUser.mutateAsync({
         username: form.username,
-        password: form.password ?? "",
-        phone: form.phone,
-        role: "peternak",
+        password: form.password,
+        phone:    form.phone,
+        role:     targetRole,
       } as CreateUserPayload);
       userId = created.id;
     }
 
-    // ── Create node baru lalu assign ──────────────────────────────────────
-    const newNodeIds: string[] = [];
-    for (const n of newNodes) {
-      await createNode.mutateAsync({
-        nodeId:   n.nodeId,
-        nodeType: n.nodeType,
-        userId,   // langsung set owner saat create
-      });
-      newNodeIds.push(n.nodeId);
-    }
+    if (targetRole === "admin") {
+      // Hitung diff untuk adminUnits
+      const originalUnits = activeUser
+        ? (activeUser.adminUnits ?? []).map((u) => u.unitId)
+        : [];
+      const toAdd    = selectedUnits.filter((id) => !originalUnits.includes(id));
+      const toRemove = originalUnits.filter((id) => !selectedUnits.includes(id));
 
-    // ── Assign existing nodes ─────────────────────────────────────────────
-    for (const nodeId of existingNodeIds) {
-      await assignNode.mutateAsync({ nodeId, payload: { userId } });
+      for (const unitId of toAdd) {
+        await assignAdmin.mutateAsync({ unitId, payload: { adminId: userId } });
+      }
+      for (const unitId of toRemove) {
+        await removeAdmin.mutateAsync(unitId);
+      }
+    } else {
+      // Peternak hanya 1 unit — cek apakah perlu swap
+      const currentUnitId = activeUser?.peternakUnit?.unitId ?? null;
+      const newUnitId     = selectedUnits[0] ?? null;
+
+      if (currentUnitId && currentUnitId !== newUnitId) {
+        await removePeternak.mutateAsync(currentUnitId);
+      }
+      if (newUnitId && newUnitId !== currentUnitId) {
+        await assignPeternak.mutateAsync({ unitId: newUnitId, payload: { peterId: userId } });
+      }
     }
 
     goTable();
   };
 
-  // ── Delete ────────────────────────────────────────────────────────────────
+  // ── Delete ─────────────────────────────────────────────────────────────────
 
   const handleDelete = async () => {
     if (!activeUser) return;
@@ -184,13 +227,13 @@ export default function UserTable() {
     goTable();
   };
 
-  // ── Loading / Error ───────────────────────────────────────────────────────
+  // ── Loading / Error ────────────────────────────────────────────────────────
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24 gap-3 text-slate-400">
         <Loader2 size={20} className="animate-spin" />
-        <span className="text-sm">Memuat data peternak...</span>
+        <span className="text-sm">Memuat data {entityLabel.toLowerCase()}...</span>
       </div>
     );
   }
@@ -208,12 +251,14 @@ export default function UserTable() {
   }
 
   const isMutating =
-    createUser.isPending ||
-    updateUser.isPending ||
-    createNode.isPending ||
-    assignNode.isPending;
+    createUser.isPending    ||
+    updateUser.isPending    ||
+    assignPeternak.isPending ||
+    removePeternak.isPending ||
+    assignAdmin.isPending   ||
+    removeAdmin.isPending;
 
-  // ── Full-page views ───────────────────────────────────────────────────────
+  // ── Full-page views ────────────────────────────────────────────────────────
 
   if (view === "add" || view === "edit") {
     return (
@@ -222,6 +267,7 @@ export default function UserTable() {
         onBack={goTable}
         onSubmit={handleSubmit}
         isMutating={isMutating}
+        showUnitAssignment={true}
       />
     );
   }
@@ -237,7 +283,7 @@ export default function UserTable() {
     );
   }
 
-  // ── Table view ────────────────────────────────────────────────────────────
+  // ── Table view ─────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -263,7 +309,7 @@ export default function UserTable() {
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-green-700 text-white text-sm font-semibold hover:bg-green-800 transition-colors flex-shrink-0 shadow-sm"
         >
           <UserPlus size={15} strokeWidth={2.5} />
-          Tambah Peternak
+          Tambah {entityLabel}
         </button>
       </div>
 
@@ -279,17 +325,31 @@ export default function UserTable() {
           </colgroup>
           <thead>
             <tr className="border-b border-slate-100">
-              <th onClick={() => handleSort("username")} className="text-left px-5 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-50/60 cursor-pointer select-none hover:text-slate-600 transition-colors">
-                <div className="flex items-center gap-1.5">Peternak <SortIcon field="username" sortField={sortField} sortDir={sortDir} /></div>
+              <th
+                onClick={() => handleSort("username")}
+                className="text-left px-5 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-50/60 cursor-pointer select-none hover:text-slate-600 transition-colors"
+              >
+                <div className="flex items-center gap-1.5">
+                  {entityLabel} <SortIcon field="username" sortField={sortField} sortDir={sortDir} />
+                </div>
               </th>
-              <th onClick={() => handleSort("phone")} className="text-left px-5 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-50/60 cursor-pointer select-none hover:text-slate-600 transition-colors">
-                <div className="flex items-center gap-1.5">No. HP <SortIcon field="phone" sortField={sortField} sortDir={sortDir} /></div>
+              <th
+                onClick={() => handleSort("phone")}
+                className="text-left px-5 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-50/60 cursor-pointer select-none hover:text-slate-600 transition-colors"
+              >
+                <div className="flex items-center gap-1.5">
+                  No. HP <SortIcon field="phone" sortField={sortField} sortDir={sortDir} />
+                </div>
               </th>
-              <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-50/60">Terdaftar</th>
               <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-50/60">
-                <div className="flex items-center gap-1.5"><Cpu size={11} /> Nodes</div>
+                Terdaftar
               </th>
-              <th className="text-right px-5 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-50/60">Aksi</th>
+              <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-50/60">
+                <div className="flex items-center gap-1.5"><Package size={11} /> Unit</div>
+              </th>
+              <th className="text-right px-5 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-50/60">
+                Aksi
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
@@ -298,14 +358,21 @@ export default function UserTable() {
                 <td colSpan={5} className="text-center py-16">
                   <div className="flex flex-col items-center gap-3">
                     <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center">
-                      <Tractor size={20} className="text-slate-300" />
+                      {targetRole === "peternak"
+                        ? <Tractor size={20} className="text-slate-300" />
+                        : <User size={20} className="text-slate-300" />
+                      }
                     </div>
                     <div>
                       <p className="text-sm font-medium text-slate-500">
-                        {search ? "Tidak ada peternak ditemukan" : "Belum ada peternak terdaftar"}
+                        {search
+                          ? `Tidak ada ${entityLabel.toLowerCase()} ditemukan`
+                          : `Belum ada ${entityLabel.toLowerCase()} terdaftar`}
                       </p>
                       <p className="text-xs text-slate-400 mt-1">
-                        {search ? "Coba ubah kata kunci pencarian" : "Klik tambah peternak untuk memulai"}
+                        {search
+                          ? "Coba ubah kata kunci pencarian"
+                          : `Klik tambah ${entityLabel.toLowerCase()} untuk memulai`}
                       </p>
                     </div>
                   </div>
@@ -319,18 +386,27 @@ export default function UserTable() {
                       <Avatar username={user.username} />
                       <div>
                         <p className="font-semibold text-slate-800 text-sm leading-tight">{user.username}</p>
-                        <span className="inline-flex items-center gap-1 text-[11px] text-lime-700 font-medium bg-lime-50 px-1.5 py-0.5 rounded-md mt-0.5">
-                          <Tractor size={9} /> Peternak
+                        <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-md mt-0.5
+                          ${targetRole === "admin"
+                            ? "text-blue-700 bg-blue-50"
+                            : "text-lime-700 bg-lime-50"
+                          }`}>
+                          {targetRole === "admin"
+                            ? <><User size={9} /> Admin</>
+                            : <><Tractor size={9} /> Peternak</>
+                          }
                         </span>
                       </div>
                     </div>
                   </td>
+
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-1.5 text-slate-500">
                       <Phone size={12} className="text-slate-400 flex-shrink-0" />
                       <span className="font-mono text-xs truncate">{user.phone ?? "—"}</span>
                     </div>
                   </td>
+
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-1.5 text-slate-400">
                       <Calendar size={12} className="flex-shrink-0" />
@@ -341,9 +417,11 @@ export default function UserTable() {
                       </span>
                     </div>
                   </td>
+
                   <td className="px-5 py-3.5">
-                    <NodeBadge nodes={user.nodes} />
+                    <UnitBadge user={user} targetRole={targetRole} />
                   </td>
+
                   <td className="px-5 py-3.5">
                     <div className="flex items-center justify-end gap-2">
                       <button
@@ -370,7 +448,7 @@ export default function UserTable() {
       {filtered.length > 0 && (
         <p className="text-xs text-slate-400 mt-3 px-1">
           Menampilkan <span className="font-semibold text-slate-600">{filtered.length}</span> dari{" "}
-          <span className="font-semibold text-slate-600">{users.length}</span> peternak
+          <span className="font-semibold text-slate-600">{users.length}</span> {entityLabel.toLowerCase()}
         </p>
       )}
     </>

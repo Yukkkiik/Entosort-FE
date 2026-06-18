@@ -1,28 +1,32 @@
 // types/harvest.ts
 
+export type TriggerSource = "ir_sensor" | "manual" | "mqtt";
+
+// ─── Relasi ringkas ───────────────────────────────────────────────────────────
+
 export interface HarvestUser {
   id:       number;
   username: string;
 }
 
-export interface HarvestNode {
-  nodeId: string;
-}
+// ─── Harvest log ─────────────────────────────────────────────────────────────
 
 export interface HarvestLog {
-  id:           number;
-  nodeId:       string;
-  userId:       number | null;
-  larvaCount:   number;
-  prepupaCount: number;
-  rejectCount:  number;
-  totalCount:   number;
-  durationSec:  number | null;
-  notes:        string | null;
-  recordedAt:   string;
-  user:         HarvestUser | null;
-  node?:        HarvestNode;
+  id:            number;
+  unitId:        string;          // ← ganti dari nodeId
+  userId:        number | null;
+  larvaCount:    number;
+  prepupaCount:  number;
+  rejectCount:   number;
+  totalCount:    number;
+  durationSec:   number | null;
+  notes:         string | null;
+  triggerSource: TriggerSource;
+  recordedAt:    string;
+  user:          HarvestUser | null;
 }
+
+// ─── Pagination ───────────────────────────────────────────────────────────────
 
 export interface HarvestPagination {
   total:      number;
@@ -35,6 +39,8 @@ export interface HarvestLogsResponse {
   data:       HarvestLog[];
   pagination: HarvestPagination;
 }
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
 
 export interface HarvestStats {
   totalSessions:        number;
@@ -52,10 +58,22 @@ export interface HarvestStatsResponse {
   data:    HarvestStats;
 }
 
+// ─── Filters & Payloads ───────────────────────────────────────────────────────
+
 export interface HarvestFilters {
-  nodeId?: string;
+  unitId?: string;   // ← ganti dari nodeId
   from?:   string;
   to?:     string;
   page?:   number;
   limit?:  number;
+}
+
+export interface CreateHarvestPayload {
+  unitId:        string;
+  larvaCount:    number;
+  prepupaCount:  number;
+  rejectCount:   number;
+  durationSec?:  number;
+  notes?:        string;
+  triggerSource?: TriggerSource;
 }

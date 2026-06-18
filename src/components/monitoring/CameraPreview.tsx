@@ -5,96 +5,63 @@ import { Activity, Cpu, Zap, Radio, Eye } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface Detection {
-  id: string;
-  label: string;
-  confidence: number;
-  x: number; y: number; w: number; h: number;
-  color?: string;
+interface RawDetection {
+  class:      string;   // "larva" | "prepupa"
+  confidence: number;   // 0–1 dari Python
+  bbox?:      number[]; // opsional, tidak dirender di frontend karena frame sudah dianotasi AI
 }
 
-// Payload dari broadcast() Express → harvest_update
-interface HarvestUpdate {
-  nodeId: string;
-  larvaCount: number;
-  prepupaCount: number;
-  rejectCount: number;
-  totalCount: number;
-  recordedAt: string;
+interface AiDetection {
+  timestamp:    number;
+  fps:          number | null;
+  detections:   RawDetection[];
+  frame:        string | null; // base64 JPEG annotated
+  frame_width:  number | null;
+  frame_height: number | null;
+}
+
+// Envelope dari broadcastEvent() backend
+interface WsMessage {
+  type:      string;
+  data:      any;
+  timestamp: string;
 }
 
 interface CameraPreviewProps {
-  /**
-   * URL MJPEG stream Raspberry Pi.
-   * Contoh: "http://192.168.1.100:8080/stream"
-   * Bisa di-set via env: process.env.NEXT_PUBLIC_PI_STREAM_URL
-   */
-  streamUrl?: string;
-  /** nodeId untuk filter broadcast WebSocket */
+  /** nodeId untuk identifikasi device */
   nodeId?: string;
-  /** URL WebSocket Express (socket.io atau ws://) */
+  /** WebSocket URL backend. Default: NEXT_PUBLIC_WS_URL atau ws://localhost:3001 */
   wsUrl?: string;
+  /** Suhu dari sensor IoT */
   temperature?: number;
+  /** Kecepatan belt conveyor (mm/s) */
   speed?: number;
-  fps?: number;
-}
-
-// ─── BoundingBox (tidak berubah) ──────────────────────────────────────────────
-
-function BoundingBox({ det, visible }: { det: Detection; visible: boolean }) {
-  const color = det.color ?? "#a3e635";
-  return (
-    <div
-      className={`absolute transition-all duration-500 ${visible ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}
-      style={{ left: `${det.x}%`, top: `${det.y}%`, width: `${det.w}%`, height: `${det.h}%` }}
-    >
-      <div className="absolute inset-0 rounded-md"
-        style={{ border: `1.5px solid ${color}`, boxShadow: `0 0 8px ${color}55, inset 0 0 8px ${color}11` }}
-      />
-      {["top-0 left-0 border-t border-l rounded-tl-md","top-0 right-0 border-t border-r rounded-tr-md",
-        "bottom-0 left-0 border-b border-l rounded-bl-md","bottom-0 right-0 border-b border-r rounded-br-md",
-      ].map((cls, i) => (
-        <div key={i} className={`absolute w-2.5 h-2.5 ${cls}`}
-          style={{ borderColor: color, borderWidth: "2px" }} />
-      ))}
-      <div className="absolute -top-6 left-0 flex items-center gap-1.5 px-2 py-0.5 rounded-t-md text-[10px] font-bold text-black whitespace-nowrap"
-        style={{ backgroundColor: color }}>
-        <span>{det.label}</span>
-        <span className="opacity-70">{det.confidence.toFixed(1)}%</span>
-      </div>
-    </div>
-  );
 }
 
 // ─── CameraPreview ────────────────────────────────────────────────────────────
 
 export default function CameraPreview({
-  streamUrl = process.env.NEXT_PUBLIC_PI_STREAM_URL ?? "",
-  nodeId = "rpi-node-01",
-  wsUrl  = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:4000",
+  nodeId      = "rpi-node-01",
+  wsUrl       = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:3001",
   temperature = 28,
-  speed = 15,
-  fps = 15,
+  speed       = 15,
 }: CameraPreviewProps) {
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const [scanPos,      setScanPos]      = useState(0);
-  const [boxVisible,   setBoxVisible]   = useState(false);
-  const [frameCount,   setFrameCount]   = useState(0);
-  const [pulseRing,    setPulseRing]    = useState(false);
-  const [streamError,  setStreamError]  = useState(false);
-  const [wsConnected,  setWsConnected]  = useState(false);
+  const [scanPos,     setScanPos]     = useState(0);
+  const [frameCount,  setFrameCount]  = useState(0);
+  const [pulseRing,   setPulseRing]   = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [aiStatus,    setAiStatus]    = useState<"running" | "stopped" | "error" | "waiting">("waiting");
 
-  // Data live dari broadcast Express
-  const [harvest, setHarvest] = useState<HarvestUpdate | null>(null);
-
-  // Bounding box dummy untuk overlay visual
-  // Diganti real data jika model sudah kirim koordinat bbox
-  const [detections, setDetections] = useState<Detection[]>([]);
+  // Data live dari AI engine via backend
+  const [aiData,     setAiData]     = useState<AiDetection | null>(null);
+  const [liveFps,    setLiveFps]    = useState<number>(0);
+  const [frameB64,   setFrameB64]   = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
 
-  // ── WebSocket: terima broadcast dari Express ───────────────────────────────
+  // ── WebSocket ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!wsUrl) return;
 
@@ -104,12 +71,12 @@ export default function CameraPreview({
 
       ws.onopen = () => {
         setWsConnected(true);
-        console.log("[WS] Connected ke Express broadcast");
+        console.log("[WS] Connected ke backend");
       };
 
       ws.onclose = () => {
         setWsConnected(false);
-        // Auto-reconnect setelah 3 detik
+        setAiStatus("stopped");
         setTimeout(connect, 3000);
       };
 
@@ -117,22 +84,41 @@ export default function CameraPreview({
 
       ws.onmessage = (e) => {
         try {
-          const msg = JSON.parse(e.data);
+          const msg: WsMessage = JSON.parse(e.data);
 
-          // Terima broadcast dari Express broadcast()
-          // format: { type: "harvest_update", payload: HarvestUpdate }
-          if (msg.type === "harvest_update") {
-            const data: HarvestUpdate = msg.payload;
+          // ── ai:detection ────────────────────────────
+          if (msg.type === "ai:detection") {
+            const data: AiDetection = msg.data;
+            setAiData(data);
+            setAiStatus("running");
 
-            // Filter berdasarkan nodeId jika perlu
-            if (data.nodeId === nodeId || !nodeId) {
-              setHarvest(data);
+            // FPS real dari AI engine
+            if (data.fps != null) setLiveFps(data.fps);
 
-              // Generate visual bounding boxes dummy berdasarkan count
-              // Ganti dengan data bbox nyata jika model mengirimnya
-              setDetections(buildDummyBoxes(data));
+            // Frame annotated dari Python (sudah ada bbox drawn)
+            if (data.frame) {
+              setFrameB64(data.frame);
+              // frame counter
+              setFrameCount((c) => c + 1);
             }
+
+            // Frontend tidak menggambar bounding box sendiri.
+            // Frame dari AI engine/Python sudah berisi hasil anotasi deteksi.
+            return;
           }
+
+          // ── ai:status ───────────────────────────────
+          if (msg.type === "ai:status") {
+            setAiStatus(msg.data.status ?? "waiting");
+            return;
+          }
+
+          // ── connected handshake ─────────────────────
+          if (msg.type === "connected") {
+            console.log("[WS] Server ready:", msg.data?.message);
+            return;
+          }
+
         } catch (err) {
           console.warn("[WS] Parse error:", err);
         }
@@ -141,24 +127,15 @@ export default function CameraPreview({
 
     connect();
     return () => wsRef.current?.close();
-  }, [wsUrl, nodeId]);
+  }, [wsUrl]);
 
   // ── Scan line animation ────────────────────────────────────────────────────
   useEffect(() => {
-    const id = setInterval(() => setScanPos((p) => p >= 100 ? 0 : p + 0.4), 16);
+    const id = setInterval(() => setScanPos((p) => (p >= 100 ? 0 : p + 0.4)), 16);
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    const t = setTimeout(() => setBoxVisible(true), 600);
-    return () => clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
-    const id = setInterval(() => setFrameCount((c) => c + 1), 1000 / fps);
-    return () => clearInterval(id);
-  }, [fps]);
-
+  // ── Pulse ring ─────────────────────────────────────────────────────────────
   useEffect(() => {
     const id = setInterval(() => {
       setPulseRing(true);
@@ -168,13 +145,36 @@ export default function CameraPreview({
   }, []);
 
   // ── Derived state ──────────────────────────────────────────────────────────
-  const totalDetected = harvest ? harvest.totalCount : 0;
-  const primaryLabel  = harvest?.prepupaCount
-    ? `PREPUPA ×${harvest.prepupaCount}`
-    : harvest?.larvaCount
-    ? `LARVA ×${harvest.larvaCount}`
+  const totalDetected = aiData?.detections.length ?? 0;
+  const larvaCount    = aiData?.detections.filter((d) => d.class === "larva").length   ?? 0;
+  const prepupaCount  = aiData?.detections.filter((d) => d.class === "prepupa").length ?? 0;
+
+  const avgConfidence = aiData?.detections.length
+    ? Math.round(
+        (aiData.detections.reduce((s, d) => s + d.confidence, 0) /
+          aiData.detections.length) * 100
+      )
+    : 0;
+
+  const primaryLabel = prepupaCount
+    ? `PREPUPA ×${prepupaCount}`
+    : larvaCount
+    ? `LARVA ×${larvaCount}`
     : "MENUNGGU...";
-  const primaryConf   = 95.0; // pakai avg confidence jika dikirim dari Python
+
+  const statusColor = {
+    running: "text-lime-400 border-lime-400/30",
+    stopped: "text-red-400 border-red-400/30",
+    error:   "text-orange-400 border-orange-400/30",
+    waiting: "text-gray-500 border-gray-500/30",
+  }[aiStatus];
+
+  const statusDot = {
+    running: "bg-lime-400",
+    stopped: "bg-red-400",
+    error:   "bg-orange-400",
+    waiting: "bg-gray-500",
+  }[aiStatus];
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -185,64 +185,95 @@ export default function CameraPreview({
       {/* ── Camera Viewport ── */}
       <div className="relative w-full aspect-[16/8] min-h-[220px] overflow-hidden">
 
-        {/* MJPEG stream langsung dari Raspberry Pi */}
-        {streamUrl && !streamError ? (
+        {/* Frame base64 dari AI engine (sudah dianotasi YOLOv8) */}
+        {frameB64 ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={streamUrl}
-            alt="BSF Live Camera"
+            src={`data:image/jpeg;base64,${frameB64}`}
+            alt="BSF Live Detection"
             className="w-full h-full object-cover"
-            onError={() => setStreamError(true)}
           />
         ) : (
-          /* Placeholder saat stream belum ada */
+          /* Placeholder saat belum ada frame */
           <div className="w-full h-full bg-[#0c0c0e] flex items-center justify-center relative overflow-hidden">
-            <div className="absolute inset-0 opacity-[0.07]"
+            <div
+              className="absolute inset-0 opacity-[0.07]"
               style={{
-                backgroundImage: "linear-gradient(rgba(163,230,53,1) 1px, transparent 1px), linear-gradient(90deg, rgba(163,230,53,1) 1px, transparent 1px)",
+                backgroundImage:
+                  "linear-gradient(rgba(163,230,53,1) 1px, transparent 1px), linear-gradient(90deg, rgba(163,230,53,1) 1px, transparent 1px)",
                 backgroundSize: "32px 32px",
-              }} />
+              }}
+            />
             <div className="absolute w-64 h-64 bg-lime-500/5 rounded-full blur-3xl top-0 left-1/4" />
             <div className="absolute w-48 h-48 bg-emerald-500/5 rounded-full blur-3xl bottom-0 right-1/4" />
             <div className="flex flex-col items-center gap-2 text-center z-10">
               <div className="text-5xl opacity-20">🦟</div>
-              <p className="text-xs text-gray-700 font-mono tracking-widest uppercase">
-                {streamError ? "Stream error — cek IP Raspberry Pi" : `Menunggu stream... ${streamUrl || "set NEXT_PUBLIC_PI_STREAM_URL"}`}
+              <p className="text-xs text-gray-600 font-mono tracking-widest uppercase">
+                {wsConnected
+                  ? "Menunggu frame dari AI engine..."
+                  : "Menghubungkan ke server..."}
               </p>
             </div>
           </div>
         )}
 
         {/* Scan line */}
-        <div className="absolute left-0 right-0 h-px pointer-events-none"
+        <div
+          className="absolute left-0 right-0 h-px pointer-events-none"
           style={{
             top: `${scanPos}%`,
-            background: "linear-gradient(90deg, transparent 0%, rgba(163,230,53,0.6) 30%, rgba(163,230,53,0.9) 50%, rgba(163,230,53,0.6) 70%, transparent 100%)",
+            background:
+              "linear-gradient(90deg, transparent 0%, rgba(163,230,53,0.6) 30%, rgba(163,230,53,0.9) 50%, rgba(163,230,53,0.6) 70%, transparent 100%)",
             boxShadow: "0 0 10px rgba(163,230,53,0.5)",
-          }} />
+          }}
+        />
 
-        {/* Bounding boxes overlay */}
-        {detections.map((det) => (
-          <BoundingBox key={det.id} det={det} visible={boxVisible} />
-        ))}
+        {/* Bounding box tidak dirender di frontend.
+            Tampilan deteksi sepenuhnya mengandalkan frame anotasi dari AI engine. */}
 
-        {/* ── Top-left: LIVE badge ── */}
-        <div className="absolute top-4 left-4 flex items-center gap-2">
+        {/* ── Top-left: badges ── */}
+        <div className="absolute top-4 left-4 flex items-center gap-2 flex-wrap">
+          {/* LIVE badge */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[11px] font-bold tracking-widest text-white">
             <span className="relative flex w-2 h-2">
-              <span className={`absolute inline-flex h-full w-full rounded-full bg-red-400 ${pulseRing ? "animate-ping" : ""} opacity-75`} />
+              <span
+                className={`absolute inline-flex h-full w-full rounded-full bg-red-400 ${
+                  pulseRing ? "animate-ping" : ""
+                } opacity-75`}
+              />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
             </span>
             LIVE
           </div>
+
+          {/* FPS live */}
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[11px] font-mono text-gray-400">
             <Activity size={10} className="text-lime-400" />
-            {fps} FPS
+            {liveFps.toFixed(1)} FPS
           </div>
+
           {/* WebSocket status */}
-          <div className={`flex items-center gap-1 px-2 py-1.5 rounded-full bg-black/60 backdrop-blur-md border text-[10px] font-mono ${wsConnected ? "border-lime-400/30 text-lime-400" : "border-red-400/30 text-red-400"}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? "bg-lime-400" : "bg-red-400"}`} />
+          <div
+            className={`flex items-center gap-1 px-2 py-1.5 rounded-full bg-black/60 backdrop-blur-md border text-[10px] font-mono ${
+              wsConnected
+                ? "border-lime-400/30 text-lime-400"
+                : "border-red-400/30 text-red-400"
+            }`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                wsConnected ? "bg-lime-400" : "bg-red-400"
+              }`}
+            />
             {wsConnected ? "WS" : "WS OFF"}
+          </div>
+
+          {/* AI engine status */}
+          <div
+            className={`flex items-center gap-1 px-2 py-1.5 rounded-full bg-black/60 backdrop-blur-md border text-[10px] font-mono uppercase ${statusColor}`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${statusDot}`} />
+            {aiStatus}
           </div>
         </div>
 
@@ -254,11 +285,11 @@ export default function CameraPreview({
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10">
             <Zap size={10} className="text-lime-400" />
-            <span className="text-xs font-bold text-white font-mono">{speed}mm/s</span>
+            <span className="text-xs font-bold text-white font-mono">{speed} mm/s</span>
           </div>
         </div>
 
-        {/* ── Bottom-left: detection count dari harvest ── */}
+        {/* ── Bottom-left: detection count ── */}
         <div className="absolute bottom-4 left-4 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-lime-400/20">
           <Eye size={11} className="text-lime-400" />
           <span className="text-[11px] font-bold text-lime-400 font-mono">
@@ -288,23 +319,20 @@ export default function CameraPreview({
               Primary Detection
             </div>
             <div className="text-sm font-bold text-white font-mono">
-              {primaryConf.toFixed(1)}%{" "}
+              {avgConfidence > 0 ? `${avgConfidence}%` : "—"}{" "}
               <span className="text-lime-400">{primaryLabel}</span>
             </div>
           </div>
         </div>
 
         {/* Count chips */}
-        {harvest && (
+        {aiData && aiData.detections.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
-            {harvest.prepupaCount > 0 && (
-              <Chip label="PREPUPA" count={harvest.prepupaCount} color="#a3e635" />
+            {prepupaCount > 0 && (
+              <Chip label="PREPUPA" count={prepupaCount} color="#a3e635" />
             )}
-            {harvest.larvaCount > 0 && (
-              <Chip label="LARVA" count={harvest.larvaCount} color="#38bdf8" />
-            )}
-            {harvest.rejectCount > 0 && (
-              <Chip label="REJECT" count={harvest.rejectCount} color="#f87171" />
+            {larvaCount > 0 && (
+              <Chip label="LARVA" count={larvaCount} color="#38bdf8" />
             )}
           </div>
         )}
@@ -312,38 +340,27 @@ export default function CameraPreview({
         {/* Model info */}
         <div className="flex items-center gap-2 text-[10px] font-mono text-gray-600">
           <Cpu size={10} className="text-gray-500" />
-          <span>YOLOv8m · ONNX · {nodeId}</span>
+          <span>YOLOv8 · EntoSort · {nodeId}</span>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Helper: chip component ───────────────────────────────────────────────────
+// ─── Chip ─────────────────────────────────────────────────────────────────────
+
 function Chip({ label, count, color }: { label: string; count: number; color: string }) {
   return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold font-mono"
-      style={{ borderColor: `${color}33`, color, backgroundColor: `${color}0d` }}>
+    <div
+      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold font-mono"
+      style={{
+        borderColor:     `${color}33`,
+        color,
+        backgroundColor: `${color}0d`,
+      }}
+    >
       <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
       {label} ×{count}
     </div>
   );
-}
-
-// ─── Helper: dummy bounding boxes dari harvest data ───────────────────────────
-function buildDummyBoxes(h: HarvestUpdate): Detection[] {
-  const boxes: Detection[] = [];
-  for (let i = 0; i < Math.min(h.prepupaCount, 3); i++) {
-    boxes.push({
-      id: `prepupa-${i}`, label: "PREPUPA", confidence: 94 + i,
-      x: 10 + i * 22, y: 20 + i * 10, w: 18, h: 14, color: "#a3e635",
-    });
-  }
-  for (let i = 0; i < Math.min(h.larvaCount, 2); i++) {
-    boxes.push({
-      id: `larva-${i}`, label: "LARVA", confidence: 88 + i,
-      x: 55 + i * 18, y: 40 + i * 12, w: 16, h: 12, color: "#38bdf8",
-    });
-  }
-  return boxes;
 }

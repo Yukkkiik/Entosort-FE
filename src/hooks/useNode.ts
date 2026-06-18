@@ -1,41 +1,50 @@
-// hooks/useNodes.ts
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+"use client";
+
+// hooks/useNode.ts
+// Node bersifat read-only dari frontend.
+// Status node diupdate otomatis via MQTT heartbeat di backend.
+import { useQuery } from "@tanstack/react-query";
 import { nodeApi } from "@/api/nodeApi";
-import type {
-  CreateNodePayload,
-  UpdateNodePayload,
-  AssignUserPayload,
-  SystemStatus,
-} from "@/types/node";
+import type { SystemStatus } from "@/types/node";
 
 // ─── Query keys ───────────────────────────────────────────────────────────────
 
 export const NODE_KEYS = {
-  all:    ["nodes"] as const,
-  status: (id: string | number) => ["nodes", String(id), "status"] as const,
+  byUnit:  (unitId: string) => ["nodes", unitId, "all"]   as const,
+  esp32:   (unitId: string) => ["nodes", unitId, "esp32"] as const,
+  rpi:     (unitId: string) => ["nodes", unitId, "rpi"]   as const,
 };
 
-// ─── useNodes ─────────────────────────────────────────────────────────────────
+// ─── useNodesByUnit — semua node (ESP32 + RPi) milik satu unit ────────────────
 
-export function useNodes(pollInterval = 30_000) {
+export function useNodesByUnit(unitId?: string, pollInterval = 30_000) {
   const query = useQuery({
-    queryKey:                  NODE_KEYS.all,
-    queryFn:                   () => nodeApi.getAll(),
-    refetchInterval:           pollInterval,
+    queryKey:                    NODE_KEYS.byUnit(unitId!),
+    queryFn:                     () => nodeApi.getByUnitId(unitId!),
+    enabled:                     !!unitId,
+    refetchInterval:             pollInterval,
     refetchIntervalInBackground: true,
-    staleTime:                 0,
-    retry:                     2,
+    staleTime:                   0,
+    retry:                       2,
   });
 
-  const online  = query.data?.filter((n) => n.status === "online").length  ?? 0;
-  const offline = query.data?.filter((n) => n.status === "offline").length ?? 0;
-  const total   = query.data?.length ?? 0;
+  const nodes   = query.data ?? [];
+  const esp32   = nodes.find((n) => n.nodeType === "esp32")     ?? null;
+  const rpi     = nodes.find((n) => n.nodeType === "raspberry") ?? null;
+
+  const systemStatus: SystemStatus = !unitId
+    ? "offline"
+    : query.isLoading
+    ? "connecting"
+    : nodes.some((n) => n.status === "online")
+    ? "online"
+    : "offline";
 
   return {
-    nodes:     query.data ?? [],
-    total,
-    online,
-    offline,
+    nodes,
+    esp32,
+    rpi,
+    systemStatus,
     isLoading: query.isLoading,
     isError:   query.isError,
     error:     query.error ? (query.error as Error).message : null,
@@ -43,83 +52,58 @@ export function useNodes(pollInterval = 30_000) {
   };
 }
 
-// ─── useNodeStatus — polling satu node ───────────────────────────────────────
+// ─── useEsp32 — hanya node ESP32 dari satu unit ───────────────────────────────
 
-export function useNodeStatus(nodeId?: string | number, pollInterval = 30_000) {
+export function useEsp32(unitId?: string, pollInterval = 30_000) {
   const query = useQuery({
-    queryKey:                  NODE_KEYS.status(nodeId!),
-    queryFn:                   () => nodeApi.getStatus(nodeId!),
-    enabled:                   !!nodeId,
-    refetchInterval:           pollInterval,
+    queryKey:                    NODE_KEYS.esp32(unitId!),
+    queryFn:                     () => nodeApi.getEsp32(unitId!),
+    enabled:                     !!unitId,
+    refetchInterval:             pollInterval,
     refetchIntervalInBackground: true,
-    staleTime:                 0,
-    retry:                     2,
+    staleTime:                   0,
+    retry:                       2,
   });
 
-  const status: SystemStatus = !nodeId
+  const status: SystemStatus = !unitId
     ? "offline"
     : query.isLoading
     ? "connecting"
     : (query.data?.status ?? "offline");
 
   return {
+    node:      query.data ?? null,
     status,
-    lastSeen: query.data?.lastSeen ?? null,
-    nodeData: query.data           ?? null,
     isLoading: query.isLoading,
     error:     query.error ? (query.error as Error).message : null,
     refetch:   query.refetch,
   };
 }
 
-// ─── useCreateNode ────────────────────────────────────────────────────────────
+// ─── useRpi — hanya node Raspberry Pi dari satu unit ─────────────────────────
 
-export function useCreateNode() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: CreateNodePayload) => nodeApi.create(payload),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: NODE_KEYS.all }),
+export function useRpi(unitId?: string, pollInterval = 30_000) {
+  const query = useQuery({
+    queryKey:                    NODE_KEYS.rpi(unitId!),
+    queryFn:                     () => nodeApi.getRpi(unitId!),
+    enabled:                     !!unitId,
+    refetchInterval:             pollInterval,
+    refetchIntervalInBackground: true,
+    staleTime:                   0,
+    retry:                       2,
   });
-}
 
-// ─── useUpdateNode ────────────────────────────────────────────────────────────
+  const status: SystemStatus = !unitId
+    ? "offline"
+    : query.isLoading
+    ? "connecting"
+    : (query.data?.status ?? "offline");
 
-export function useUpdateNode() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, payload }: { id: string | number; payload: UpdateNodePayload }) =>
-      nodeApi.update(id, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: NODE_KEYS.all }),
-  });
-}
-
-// ─── useDeleteNode ────────────────────────────────────────────────────────────
-
-export function useDeleteNode() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string | number) => nodeApi.remove(id),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: NODE_KEYS.all }),
-  });
-}
-
-// ─── useAssignNode ────────────────────────────────────────────────────────────
-
-export function useAssignNode() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ nodeId, payload }: { nodeId: string; payload: AssignUserPayload }) =>
-      nodeApi.assignUser(nodeId, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: NODE_KEYS.all }),
-  });
-}
-
-// ─── useRemoveNodeUser ────────────────────────────────────────────────────────
-
-export function useRemoveNodeUser() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (nodeId: string) => nodeApi.removeUser(nodeId),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: NODE_KEYS.all }),
-  });
+  return {
+    node:      query.data ?? null,
+    status,
+    isLoading: query.isLoading,
+    error:     query.error ? (query.error as Error).message : null,
+    refetch:   query.refetch,
+  };
 }

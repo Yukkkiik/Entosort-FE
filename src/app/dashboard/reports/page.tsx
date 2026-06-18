@@ -3,6 +3,7 @@
 import { useSetHeader } from "@/components/layout/HeaderContext";
 import HistoryDashboard from "@/components/reports/ReportsDashboard";
 import { RotateCcw, Download } from "lucide-react";
+import RoleGuard from "@/lib/RoleGuard";
  
 export default function HistoryPage() {
   useSetHeader({
@@ -45,5 +46,9 @@ export default function HistoryPage() {
     ),
   });
  
-  return <HistoryDashboard />;
+  return (
+    <RoleGuard allowedRoles={["admin", "peternak"]}>
+      <HistoryDashboard />
+    </RoleGuard>
+  );
 }

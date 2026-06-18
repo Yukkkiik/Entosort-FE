@@ -19,7 +19,12 @@ export function useLogin() {
     onSuccess: (res) => {
       const { user } = res.data;
       setAuth(user);
-      router.push("/dashboard");
+
+      if (user.role === "superadmin") {
+        router.push("/dashboard/user");
+      } else {
+        router.push("/dashboard");
+      }
     },
   });
 }
@@ -76,5 +81,6 @@ export function useCurrentUser() {
     isAuthenticated,
     isAdmin: user?.role === "admin",
     isFarmer: user?.role === "peternak",
+    isSuperAdmin: user?.role === 'superadmin'
   };
 }

@@ -126,7 +126,7 @@ export default function HarvestTable({ data, isLoading, page, totalPages, onPage
                   {/* Node */}
                   <td className="px-5 py-4">
                     <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-mono font-semibold text-slate-700">
-                      {row.nodeId}
+                      {row.unitId}
                     </span>
                   </td>
  

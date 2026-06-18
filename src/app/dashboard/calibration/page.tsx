@@ -18,6 +18,7 @@ import Card from "@/components/ui/Card";
 import SliderControl from "@/components/ui/SliderControl";
 import NumberStepper from "@/components/ui/NumberStepper";
 import { useSetHeader } from "@/components/layout/HeaderContext";
+import RoleGuard from "@/lib/RoleGuard";
 
 type ColorTarget = "larva" | "prepupa";
 
@@ -134,9 +135,9 @@ export default function CalibrationPage() {
   });
 
   return (
-    // pb-28 untuk beri ruang fixed bottom bar
+    <>
+    <RoleGuard allowedRoles={["admin", "peternak"]}>
     <div className="pb-28">
-
       {/* ── Section 1: Camera & AI Calibration ── */}
       <section className="mb-6 opacity-0 animate-[fadeSlideUp_0.5s_ease_0.1s_forwards]">
         <div className="flex items-center gap-2 mb-4">
@@ -405,5 +406,7 @@ export default function CalibrationPage() {
         </div>
       </div>
     </div>
+    </RoleGuard>
+    </>
   );
 }

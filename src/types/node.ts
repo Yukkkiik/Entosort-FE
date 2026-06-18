@@ -1,70 +1,38 @@
-// ============================================================
 // types/node.ts
-// ============================================================
 
-// --------------- User (relasi dari node) --------------------
+// ─── Enums ────────────────────────────────────────────────────────────────────
 
-export interface NodeUser {
-  id: number;
-  username: string;
-  role: string;
-}
+export type NodeType   = "esp32" | "raspberry";
+export type NodeStatus = "online" | "offline";
 
-// --------------- Node utama ---------------------------------
+// ─── Node utama (read-only, dibuat dari MQTT heartbeat) ──────────────────────
 
-export interface NodeStatusResponse {
-  id: number;
-  nodeId: string;
+export interface AppNode {
+  id:        number;
+  nodeId:    string;
+  nodeType:  NodeType;
+  status:    NodeStatus;
   ipAddress: string | null;
-  status: "online" | "offline";
-  firmware: string | null;
-  lastSeen: string | null;
+  firmware:  string | null;
+  lastSeen:  string | null;
   createdAt: string;
   updatedAt: string;
-  nodeType: "microcontroller" | "raspberry";
-  userId: number | null;
-  user: NodeUser | null;
+  unitId:    string;
 }
 
-// Alias singkat
-export type NodeStatus = NodeStatusResponse["status"];
-export type NodeType = NodeStatusResponse["nodeType"];
+// ─── API responses ────────────────────────────────────────────────────────────
 
-// --------------- Request payloads ---------------------------
-
-export interface CreateNodePayload {
-  nodeId: string;
-  nodeType: "microcontroller" | "raspberry";
-  ipAddress?: string;
-  firmware?: string;
-  userId?: number;
-}
-
-export interface UpdateNodePayload {
-  nodeType?: "microcontroller" | "raspberry";
-  ipAddress?: string;
-  firmware?: string;
-  status?: "online" | "offline";
-}
-
-export interface AssignUserPayload {
-  userId: number;
-}
-
-// --------------- API response wrappers ----------------------
-
-export interface ApiResponse<T> {
+export interface NodesResponse {
   success: boolean;
-  data: T;
-  message?: string;
+  data:    AppNode[];
 }
 
-export interface ApiMessageResponse {
+export interface NodeResponse {
   success: boolean;
-  message: string;
+  data:    AppNode | null;
 }
 
-// --------------- Halaman / UI (tidak berubah) ---------------
+// ─── UI / Page types (tidak berubah) ─────────────────────────────────────────
 
 export type SystemStatus = "online" | "offline" | "connecting";
 
@@ -73,13 +41,13 @@ export interface Breadcrumb {
 }
 
 export interface PageHeaderProps {
-  title: string;
-  subtitle?: string;
-  titleIcon?: string;
-  breadcrumbs?: Breadcrumb[];
-  status?: SystemStatus;
-  nodeId?: string | number;
+  title:         string;
+  subtitle?:     string;
+  titleIcon?:    string;
+  breadcrumbs?:  Breadcrumb[];
+  status?:       SystemStatus;
+  unitId?:       string;
   pollInterval?: number;
-  actions?: React.ReactNode;
+  actions?:      React.ReactNode;
   animationDelay?: number;
 }
