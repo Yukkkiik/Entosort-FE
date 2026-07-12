@@ -47,7 +47,7 @@ const STATUS_CFG: Record<
 };
 
 // ─── UnitSummaryBadge ─────────────────────────────────────────────────────────
-// Menampilkan berapa unit online dari total milik user (untuk peternak)
+// Menampilkan berapa unit online dari total milik user (untuk Operator)
 
 function UnitSummaryBadge() {
   const { total, online, isLoading } = useUnits(30_000);
@@ -103,7 +103,7 @@ export default function PageHeader({
 }: PageHeaderProps) {
   const [time, setTime] = useState("");
   const user = useAuthStore((s) => s.user);
-  const isPeternak = user?.role === "peternak";
+  const isOperator = user?.role === "operator";
 
   // Jika ada unitId spesifik → poll status satu unit
   const { status: dynamicStatus, unit } = useUnitStatus(unitId, pollInterval);
@@ -204,11 +204,11 @@ export default function PageHeader({
           )}
 
           {/*
-            ── Status badge — hanya untuk peternak ────────────────
+            ── Status badge — hanya untuk Operator ────────────────
             1. Ada unitId  → status unit spesifik (halaman detail)
-            2. Tidak ada   → ringkasan semua unit milik peternak
+            2. Tidak ada   → ringkasan semua unit milik Operator
           */}
-          {isPeternak && (
+          {isOperator && (
             unitId ? (
               <div
                 className={`mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold ${s.pill} ${s.text}`}
