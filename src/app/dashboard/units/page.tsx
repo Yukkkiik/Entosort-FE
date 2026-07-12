@@ -16,10 +16,10 @@ export default function UnitPage() {
 
   const stats = useMemo(() => {
     const withAdmin    = units.filter((u) => u.adminId != null).length;
-    const withPeternak = units.filter((u) => u.peterId != null).length;
+    const withOperator = units.filter((u) => u.operatorId != null).length;
     const withoutAdmin = total - withAdmin;
 
-    return { withAdmin, withPeternak, withoutAdmin };
+    return { withAdmin, withOperator, withoutAdmin };
   }, [units, total]);
 
   useSetHeader({
@@ -90,8 +90,8 @@ export default function UnitPage() {
           trendLabel="Tidak terhubung"
         />
         <StatsCard
-          label="Terisi Peternak"
-          value={`${stats.withPeternak}/${total}`}
+          label="Terisi Operator"
+          value={`${stats.withOperator}/${total}`}
           icon={<Tractor size={18} />}
           accent="violet"
           trend="neutral"

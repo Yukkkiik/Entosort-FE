@@ -12,6 +12,7 @@ import { useSetHeader } from "@/components/layout/HeaderContext";
 import { useUnits } from "@/hooks/useUnit";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useManualMode } from "@/hooks/useControl";
+import { useSettings } from "@/hooks/useSettings";
 import RoleGuard from "@/lib/RoleGuard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -69,21 +70,39 @@ const defaultActiveMap = Object.fromEntries(
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ControlPage() {
-  const { user, role }     = useCurrentUser();
-  const isAdmin = role === "admin";
+  const { role }           = useCurrentUser();
+  const isAdmin            = role === "admin";
   const { units }          = useUnits();
   const manualModeMutation = useManualMode();
 
-  // selectedUnitId: null = belum ada pilihan user (pakai unit pertama sebagai fallback)
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
-  const [isManual,        setIsManual]       = useState(true);
-  const [lastUpdated,     setLastUpdated]    = useState("");
-  const [activeMap,       setActiveMap]      = useState<Record<string, boolean>>(defaultActiveMap);
-  
-  const activeUnitId = selectedUnitId 
-  ?? units?.find((u) => u.status === "online")?.unitId 
-  ?? units?.[0]?.unitId 
-  ?? "";
+  const [lastUpdated,    setLastUpdated]    = useState("");
+  const [activeMap,      setActiveMap]      = useState<Record<string, boolean>>(defaultActiveMap);
+
+  // isManual: null = belum ada data dari DB (loading)
+  const [isManual, setIsManual] = useState<boolean | null>(null);
+
+  const activeUnitId =
+    selectedUnitId ??
+    units?.find((u) => u.status === "online")?.unitId ??
+    units?.[0]?.unitId ??
+    "";
+
+  // ── Fetch settings dari DB untuk unit yang dipilih ──────────────────────────
+  const { data: settings } = useSettings(activeUnitId || undefined);
+
+  // Sync isManual dari DB setiap kali settings atau unit berubah
+  useEffect(() => {
+    if (!settings) return;
+    setIsManual(settings.manualMode ?? false);
+
+    // Sync activeMap dari DB — motorOn & solenoidOn
+    setActiveMap((prev) => ({
+      ...prev,
+      motor_conveyor: settings.motorOn    ?? prev.motor_conveyor,
+      sorting_servo:  settings.solenoidOn ?? prev.sorting_servo,
+    }));
+  }, [settings]);
 
   // Live clock
   useEffect(() => {
@@ -98,11 +117,11 @@ export default function ControlPage() {
     return () => clearInterval(id);
   }, []);
 
-  // Ganti unit → reset toggle ke default
+  // Ganti unit → reset ke default sementara, tunggu settings baru dari DB
   const handleUnitChange = useCallback((unitId: string) => {
     setSelectedUnitId(unitId);
     setActiveMap(defaultActiveMap);
-    setIsManual(true);
+    setIsManual(null); // loading state sampai settings masuk
   }, []);
 
   const handleToggle = useCallback((id: string, value: boolean) => {
@@ -115,17 +134,19 @@ export default function ControlPage() {
       setIsManual(value); // optimistic
       try {
         await manualModeMutation.mutateAsync({ unitId: activeUnitId, enabled: value });
+        // Setelah berhasil, useSettings akan invalidate & refetch otomatis
+        // sehingga activeMap juga ikut terupdate dari DB
       } catch {
         setIsManual(!value); // rollback
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeUnitId] // manualModeMutation sengaja tidak di deps — object baru tiap render
+    [activeUnitId]
   );
 
   const handleReset = useCallback(() => {
     setActiveMap(defaultActiveMap);
-    setIsManual(true);
+    setIsManual(false); // reset ke AUTO
   }, []);
 
   const summaryComponents: ComponentStatus[] = MACHINE_COMPONENTS.map((c) => ({
@@ -140,6 +161,10 @@ export default function ControlPage() {
   const esp32Node: UnitNode | undefined = selectedUnit?.nodes?.find(
     (n) => n.nodeType === "esp32"
   );
+
+  // isManual masih null = settings belum loaded
+  const isManualResolved = isManual ?? false;
+  const isLoading        = isManual === null && !!activeUnitId;
 
   useSetHeader({
     titleIcon:   "🎛️",
@@ -184,7 +209,7 @@ export default function ControlPage() {
 
   return (
     <>
-      <RoleGuard allowedRoles={["admin", "peternak"]}>
+      <RoleGuard allowedRoles={["admin", "operator"]}>
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap');
           @keyframes fadeSlideUp {
@@ -220,9 +245,9 @@ export default function ControlPage() {
         {/* ── Mode toggle ── */}
         <div className="mb-5">
           <ManualModeToggle
-            isManual={isManual}
+            isManual={isManualResolved}
             onChange={handleManualModeChange}
-            disabled={manualModeMutation.isPending}
+            disabled={manualModeMutation.isPending || isLoading}
             animationDelay={150}
           />
         </div>
@@ -237,7 +262,7 @@ export default function ControlPage() {
               description={comp.description}
               icon={comp.icon}
               isActive={activeMap[comp.id]}
-              isManualMode={isManual}
+              isManualMode={isManualResolved}
               unitId={activeUnitId}
               onToggle={handleToggle}
               animationDelay={250 + i * 75}

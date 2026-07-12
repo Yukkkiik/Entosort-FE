@@ -47,7 +47,7 @@ export default function HistoryPage() {
   });
  
   return (
-    <RoleGuard allowedRoles={["admin", "peternak"]}>
+    <RoleGuard allowedRoles={["admin", "operator"]}>
       <HistoryDashboard />
     </RoleGuard>
   );

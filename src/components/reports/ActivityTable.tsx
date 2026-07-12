@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { ArrowUpDown, Database, Clock, FileText } from "lucide-react";
 import type { HarvestLog } from "@/types/harvest";
+import Pagination from "@/components/ui/pagination";
  
 type SortKey = "recordedAt" | "larvaCount" | "prepupaCount" | "rejectCount" | "totalCount" | "durationSec";
 type SortDir = "asc" | "desc";
@@ -91,7 +92,7 @@ export default function HarvestTable({ data, isLoading, page, totalPages, onPage
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
                 <ThBtn label="Waktu"          sortKey="recordedAt"   onSort={handleSort} />
-                <th className="px-5 py-4 font-bold text-xs uppercase tracking-wide">Node</th>
+                <th className="px-5 py-4 font-bold text-xs uppercase tracking-wide">Unit</th>
                 <ThBtn label="Larva"          sortKey="larvaCount"   onSort={handleSort} />
                 <ThBtn label="Prepupa"        sortKey="prepupaCount" onSort={handleSort} />
                 <ThBtn label="Reject"         sortKey="rejectCount"  onSort={handleSort} />
@@ -171,28 +172,7 @@ export default function HarvestTable({ data, isLoading, page, totalPages, onPage
       </div>
  
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <button
-            onClick={() => onPageChange(page - 1)}
-            disabled={page <= 1}
-            className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            ← Prev
-          </button>
-          <span className="text-sm text-gray-500">
-            Halaman <span className="font-bold text-gray-900">{page}</span> dari{" "}
-            <span className="font-bold text-gray-900">{totalPages}</span>
-          </span>
-          <button
-            onClick={() => onPageChange(page + 1)}
-            disabled={page >= totalPages}
-            className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            Next →
-          </button>
-        </div>
-      )}
+      <Pagination page={page} totalPages={totalPages} onPageChange={onPageChange} />
     </div>
   );
 }

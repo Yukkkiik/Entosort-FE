@@ -28,7 +28,6 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-// Shape error response dari backend (axios wraps ini di err.response.data)
 interface ApiErrorResponse {
   success: boolean;
   message: string;
@@ -43,7 +42,6 @@ function extractErrorMessage(err: unknown, fallback: string): string {
     const response = (err as { response?: { data?: unknown } }).response;
     const data = response?.data;
 
-    // Backend kadang return Blob kalau responseType:"blob" tapi status error
     if (data instanceof Blob) return "Tidak ada data pada filter yang dipilih.";
 
     if (
@@ -68,24 +66,23 @@ export default function HistoryDashboard() {
 
   const { units } = useUnits();
 
-  // Kalau peternak hanya punya 1 unit, auto-select
   useEffect(() => {
     if (!isAdmin && units?.length === 1 && !unitId) {
       setUnitId(units[0].unitId);
     }
   }, [units, isAdmin, unitId]);
 
-  const filters     = { from, to, unitId: unitId || undefined, page, limit: 20 };
-  const statFilters = { from, to, unitId: unitId || undefined };
+  const filters     = { from, to, unitId: unitId, page, limit: 8 };
+  const statFilters = { from, to, unitId: unitId };
 
   const { data: logsData, isLoading: logsLoading } = useHarvestLogs(filters);
   const { data: stats,    isLoading: statsLoading } = useHarvestStats(statFilters);
 
-  const logs        = Array.isArray(logsData) ? logsData : (logsData?.data ?? []);
-  const pagination  = Array.isArray(logsData) ? null : logsData?.pagination;
-  const total       = pagination?.total      ?? logs.length;
-  const totalPages  = pagination?.totalPages ?? 1;
-  const currentPage = pagination?.page       ?? page;
+  const logs        = logsData?.data             ?? [];
+  const pagination  = logsData?.pagination;
+  const total       = pagination?.total          ?? logs.length;
+  const totalPages  = pagination?.totalPages     ?? 1;
+  const currentPage = pagination?.page           ?? page;
 
   const handleReset = () => {
     setFrom(defaultFrom());

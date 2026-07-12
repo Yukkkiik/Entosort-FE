@@ -18,39 +18,39 @@ export default function UserPage() {
   const stats = useMemo(() => {
     if (role === "superadmin") {
       const admins   = allUsers.filter((u) => u.role === "admin");
-      const peternak = allUsers.filter((u) => u.role === "peternak");
+      const operator = allUsers.filter((u) => u.role === "operator");
       const total    = allUsers.filter((u) => u.role !== "superadmin");
       return {
         totalAccounts:    total.length,
         adminAccounts:    admins.length,
-        peternakAccounts: peternak.length,
+        operatorAccounts: operator.length,
         ratio: admins.length > 0
-          ? `${(peternak.length / admins.length).toFixed(1)}x`
+          ? `${(operator.length / admins.length).toFixed(1)}x`
           : "—",
       };
     }
 
     if (role === "admin") {
-      // Admin hanya lihat peternak — data sudah difilter di backend
-      const myPeternak = allUsers.filter((u) => u.role === "peternak");
+      // Admin hanya lihat operator — data sudah difilter di backend
+      const myOperator = allUsers.filter((u) => u.role === "operator");
 
-      // Peternak yang sudah punya unit (peternakUnit bukan null)
-      const withUnit    = myPeternak.filter((u) => u.peternakUnit != null);
-      const withoutUnit = myPeternak.length - withUnit.length;
+      // Operator yang sudah punya unit (OperatorUnit bukan null)
+      const withUnit    = myOperator.filter((u) => u.operatorUnit != null);
+      const withoutUnit = myOperator.length - withUnit.length;
 
-      // Total node dari semua unit peternak
-      const totalNodes = myPeternak.reduce(
-        (acc, u) => acc + (u.peternakUnit?.nodes?.length ?? 0),
+      // Total node dari semua unit Operator
+      const totalNodes = myOperator.reduce(
+        (acc, u) => acc + (u.operatorUnit?.nodes?.length ?? 0),
         0
       );
 
       return {
-        totalAccounts: myPeternak.length,
+        totalAccounts: myOperator.length,
         withUnit:      withUnit.length,
         withoutUnit,
         totalNodes,
-        unitRatio: myPeternak.length > 0
-          ? `${Math.round((withUnit.length / myPeternak.length) * 100)}%`
+        unitRatio: myOperator.length > 0
+          ? `${Math.round((withUnit.length / myOperator.length) * 100)}%`
           : "0%",
       };
     }
@@ -58,7 +58,7 @@ export default function UserPage() {
     return {
       totalAccounts:    0,
       adminAccounts:    0,
-      peternakAccounts: 0,
+      operatorAccounts: 0,
       ratio:            "—",
     };
   }, [allUsers, role]);
@@ -112,7 +112,7 @@ export default function UserPage() {
               accent="green"
               trend="neutral"
               trendValue={`${stats.totalAccounts}`}
-              trendLabel="Admin + Peternak"
+              trendLabel="Admin + operator"
             />
             <StatsCard
               label="Admin"
@@ -124,16 +124,16 @@ export default function UserPage() {
               trendLabel="Total admin terdaftar"
             />
             <StatsCard
-              label="Peternak"
-              value={stats.peternakAccounts ?? 0}
+              label="operator"
+              value={stats.operatorAccounts ?? 0}
               icon={<UserCheck size={18} />}
               accent="violet"
               trend="neutral"
-              trendValue={`${stats.peternakAccounts ?? 0}`}
-              trendLabel="Total peternak terdaftar"
+              trendValue={`${stats.operatorAccounts ?? 0}`}
+              trendLabel="Total operator terdaftar"
             />
             <StatsCard
-              label="Ratio Peternak/Admin"
+              label="Ratio operator/Admin"
               value={stats.ratio ?? "—"}
               icon={<Package size={18} />}
               accent="blue"
@@ -145,13 +145,13 @@ export default function UserPage() {
         ) : (
           <>
             <StatsCard
-              label="Total Peternak"
+              label="Total Operator"
               value={stats.totalAccounts}
               icon={<Users size={18} />}
               accent="green"
               trend="neutral"
               trendValue={`${stats.totalAccounts}`}
-              trendLabel="Peternak Anda"
+              trendLabel="Operator Anda"
             />
             <StatsCard
               label="Sudah Punya Unit"
@@ -160,7 +160,7 @@ export default function UserPage() {
               accent="blue"
               trend="neutral"
               trendValue={stats.unitRatio ?? "0%"}
-              trendLabel="Dari total peternak"
+              trendLabel="Dari total Operator"
             />
             <StatsCard
               label="Total Node"
@@ -169,7 +169,7 @@ export default function UserPage() {
               accent="violet"
               trend="neutral"
               trendValue={`${stats.totalNodes ?? 0}`}
-              trendLabel="Node di unit peternak"
+              trendLabel="Node di unit Operator"
             />
             <StatsCard
               label="Belum Ada Unit"

@@ -25,7 +25,7 @@ export const useAuthStore = create<AuthStore>()(
         set({
           user,
           isAuthenticated: true,
-          expiresAt: Date.now() + 60 * 60 * 1000, // 1 jam
+          expiresAt: Date.now() + 60 * 60 * 1000, 
         }),
 
       clearAuth: () =>

@@ -6,37 +6,64 @@ import { Activity, Cpu, Zap, Radio, Eye } from "lucide-react";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface RawDetection {
-  class:      string;   // "larva" | "prepupa"
-  confidence: number;   // 0–1 dari Python
-  bbox?:      number[]; // opsional, tidak dirender di frontend karena frame sudah dianotasi AI
+  class:      string;
+  confidence: number;
+  bbox?:      number[];
 }
 
 interface AiDetection {
   timestamp:    number;
   fps:          number | null;
   detections:   RawDetection[];
-  frame:        string | null; // base64 JPEG annotated
+  frame:        string | null;
   frame_width:  number | null;
   frame_height: number | null;
 }
 
-// Envelope dari broadcastEvent() backend
+interface WsDetectionData {
+  timestamp:    number;
+  fps:          number | null;
+  detections:   RawDetection[];
+  frame:        string | null;
+  frame_width:  number | null;
+  frame_height: number | null;
+}
+
+interface WsStatusData {
+  status?: "running" | "stopped" | "error" | "waiting";
+  message?: string;
+}
+
+interface WsConnectedData {
+  message?: string;
+}
+
+type WsPayload = WsDetectionData | WsStatusData | WsConnectedData;
+
 interface WsMessage {
   type:      string;
-  data:      any;
+  data:      WsPayload;
   timestamp: string;
 }
 
 interface CameraPreviewProps {
-  /** nodeId untuk identifikasi device */
   nodeId?: string;
-  /** WebSocket URL backend. Default: NEXT_PUBLIC_WS_URL atau ws://localhost:3001 */
   wsUrl?: string;
-  /** Suhu dari sensor IoT */
   temperature?: number;
-  /** Kecepatan belt conveyor (mm/s) */
   speed?: number;
+  onDetectionUpdate?: (data: {
+    larvaCount:    number;
+    prepupaCount:  number;
+    totalDetected: number;
+    avgConfidence: number;
+    fps:           number;
+  }) => void;
 }
+
+// Berapa lama (ms) frame deteksi ditahan sebelum boleh diganti raw frame
+const DETECTION_HOLD_MS  = 1500;
+// Berapa lama (ms) sebelum frame bbox di-reset paksa (koneksi putus / RPi lag)
+const DETECTION_RESET_MS = 3000;
 
 // ─── CameraPreview ────────────────────────────────────────────────────────────
 
@@ -45,19 +72,33 @@ export default function CameraPreview({
   wsUrl       = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:3001",
   temperature = 28,
   speed       = 15,
+  onDetectionUpdate,
 }: CameraPreviewProps) {
 
-  // ── State ──────────────────────────────────────────────────────────────────
   const [scanPos,     setScanPos]     = useState(0);
   const [frameCount,  setFrameCount]  = useState(0);
   const [pulseRing,   setPulseRing]   = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [aiStatus,    setAiStatus]    = useState<"running" | "stopped" | "error" | "waiting">("waiting");
+  const [aiData,      setAiData]      = useState<AiDetection | null>(null);
+  const [liveFps,     setLiveFps]     = useState<number>(0);
+  const [frameB64,    setFrameB64]    = useState<string | null>(null);
 
-  // Data live dari AI engine via backend
-  const [aiData,     setAiData]     = useState<AiDetection | null>(null);
-  const [liveFps,    setLiveFps]    = useState<number>(0);
-  const [frameB64,   setFrameB64]   = useState<string | null>(null);
+  // ── FIX 1: Simpan callback di ref agar tidak trigger reconnect WS ──────────
+  // onDetectionUpdate adalah fungsi baru setiap render DashboardPage →
+  // kalau masuk dependency array useEffect WS, WS reconnect terus-menerus.
+  const onDetectionRef = useRef(onDetectionUpdate);
+  useEffect(() => {
+    onDetectionRef.current = onDetectionUpdate;
+  }, [onDetectionUpdate]);
+
+  // Timestamp terakhir kali frame dengan deteksi diterima
+  const lastDetectionFrameAt = useRef<number>(0);
+
+  // ── FIX 2: Timer untuk reset paksa frame bbox yang stuck ──────────────────
+  // Kalau RPi tidak kirim frame baru setelah DETECTION_RESET_MS (misal lag /
+  // koneksi putus sesaat), frame bbox lama tidak akan stuck selamanya.
+  const detectionHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -65,11 +106,16 @@ export default function CameraPreview({
   useEffect(() => {
     if (!wsUrl) return;
 
+    let destroyed = false;
+
     const connect = () => {
+      if (destroyed) return;
+
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
+        if (destroyed) { ws.close(); return; }
         setWsConnected(true);
         console.log("[WS] Connected ke backend");
       };
@@ -77,45 +123,82 @@ export default function CameraPreview({
       ws.onclose = () => {
         setWsConnected(false);
         setAiStatus("stopped");
-        setTimeout(connect, 3000);
+        if (!destroyed) setTimeout(connect, 3000);
       };
 
       ws.onerror = (e) => console.error("[WS] Error:", e);
 
       ws.onmessage = (e) => {
+        if (destroyed) return;
         try {
-          const msg: WsMessage = JSON.parse(e.data);
+          const msg: WsMessage = JSON.parse(e.data as string);
 
           // ── ai:detection ────────────────────────────
           if (msg.type === "ai:detection") {
-            const data: AiDetection = msg.data;
+            const data = msg.data as WsDetectionData;
+            const hasDetections = data.detections && data.detections.length > 0;
+            const now = Date.now();
+
             setAiData(data);
             setAiStatus("running");
-
-            // FPS real dari AI engine
             if (data.fps != null) setLiveFps(data.fps);
 
-            // Frame annotated dari Python (sudah ada bbox drawn)
             if (data.frame) {
-              setFrameB64(data.frame);
-              // frame counter
-              setFrameCount((c) => c + 1);
+              if (hasDetections) {
+                // Frame ada bbox — selalu tampilkan dan catat waktu
+                lastDetectionFrameAt.current = now;
+                setFrameB64(data.frame);
+                setFrameCount((c) => c + 1);
+
+                // ── FIX 2: Reset timer paksa setiap kali ada deteksi baru ──
+                if (detectionHoldTimer.current) {
+                  clearTimeout(detectionHoldTimer.current);
+                }
+                detectionHoldTimer.current = setTimeout(() => {
+                  // Paksa accept raw frame setelah DETECTION_RESET_MS
+                  // tanpa perlu nunggu elapsed >= DETECTION_HOLD_MS
+                  lastDetectionFrameAt.current = 0;
+                }, DETECTION_RESET_MS);
+
+              } else {
+                // Frame raw (tidak ada deteksi) — hanya tampilkan kalau
+                // sudah cukup lama sejak frame deteksi terakhir
+                const elapsed = now - lastDetectionFrameAt.current;
+                if (elapsed >= DETECTION_HOLD_MS) {
+                  setFrameB64(data.frame);
+                  setFrameCount((c) => c + 1);
+                }
+                // Kalau belum lewat DETECTION_HOLD_MS, skip — frame bbox tetap tampil
+              }
             }
 
-            // Frontend tidak menggambar bounding box sendiri.
-            // Frame dari AI engine/Python sudah berisi hasil anotasi deteksi.
+            // ── FIX 1: Panggil via ref, bukan langsung ───────────────────
+            onDetectionRef.current?.({
+              larvaCount:    data.detections.filter(d => d.class === "larva").length,
+              prepupaCount:  data.detections.filter(d => d.class === "prepupa").length,
+              totalDetected: data.detections.length,
+              avgConfidence: data.detections.length
+                ? Math.round(
+                    data.detections.reduce((s, d) => s + d.confidence, 0) /
+                    data.detections.length * 100
+                  )
+                : 0,
+              fps: data.fps ?? 0,
+            });
             return;
           }
 
           // ── ai:status ───────────────────────────────
           if (msg.type === "ai:status") {
-            setAiStatus(msg.data.status ?? "waiting");
+            const data = msg.data as WsStatusData;
+            setAiStatus(data.status ?? "waiting");
             return;
           }
 
           // ── connected handshake ─────────────────────
           if (msg.type === "connected") {
-            console.log("[WS] Server ready:", msg.data?.message);
+            const data = msg.data as WsConnectedData;
+            console.log("[WS] Server ready:", data.message);
             return;
           }
 
@@ -126,7 +209,14 @@ export default function CameraPreview({
     };
 
     connect();
-    return () => wsRef.current?.close();
+
+    return () => {
+      destroyed = true;
+      // Bersihkan timer saat unmount
+      if (detectionHoldTimer.current) clearTimeout(detectionHoldTimer.current);
+      wsRef.current?.close();
+    };
+  // ── FIX 1: Hanya wsUrl di dependency — onDetectionUpdate TIDAK masuk sini ─
   }, [wsUrl]);
 
   // ── Scan line animation ────────────────────────────────────────────────────
@@ -185,7 +275,6 @@ export default function CameraPreview({
       {/* ── Camera Viewport ── */}
       <div className="relative w-full aspect-[16/8] min-h-[220px] overflow-hidden">
 
-        {/* Frame base64 dari AI engine (sudah dianotasi YOLOv8) */}
         {frameB64 ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -194,7 +283,6 @@ export default function CameraPreview({
             className="w-full h-full object-cover"
           />
         ) : (
-          /* Placeholder saat belum ada frame */
           <div className="w-full h-full bg-[#0c0c0e] flex items-center justify-center relative overflow-hidden">
             <div
               className="absolute inset-0 opacity-[0.07]"
@@ -228,12 +316,8 @@ export default function CameraPreview({
           }}
         />
 
-        {/* Bounding box tidak dirender di frontend.
-            Tampilan deteksi sepenuhnya mengandalkan frame anotasi dari AI engine. */}
-
         {/* ── Top-left: badges ── */}
         <div className="absolute top-4 left-4 flex items-center gap-2 flex-wrap">
-          {/* LIVE badge */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[11px] font-bold tracking-widest text-white">
             <span className="relative flex w-2 h-2">
               <span
@@ -246,13 +330,11 @@ export default function CameraPreview({
             LIVE
           </div>
 
-          {/* FPS live */}
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[11px] font-mono text-gray-400">
             <Activity size={10} className="text-lime-400" />
             {liveFps.toFixed(1)} FPS
           </div>
 
-          {/* WebSocket status */}
           <div
             className={`flex items-center gap-1 px-2 py-1.5 rounded-full bg-black/60 backdrop-blur-md border text-[10px] font-mono ${
               wsConnected
@@ -268,7 +350,6 @@ export default function CameraPreview({
             {wsConnected ? "WS" : "WS OFF"}
           </div>
 
-          {/* AI engine status */}
           <div
             className={`flex items-center gap-1 px-2 py-1.5 rounded-full bg-black/60 backdrop-blur-md border text-[10px] font-mono uppercase ${statusColor}`}
           >
@@ -309,7 +390,6 @@ export default function CameraPreview({
       {/* ── Bottom info bar ── */}
       <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 border-t border-white/5 bg-[#0f0f11]">
 
-        {/* Primary detection */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-lime-400/10 border border-lime-400/20 flex items-center justify-center">
             <Radio size={14} className="text-lime-400" />
@@ -325,7 +405,6 @@ export default function CameraPreview({
           </div>
         </div>
 
-        {/* Count chips */}
         {aiData && aiData.detections.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             {prepupaCount > 0 && (
@@ -337,7 +416,6 @@ export default function CameraPreview({
           </div>
         )}
 
-        {/* Model info */}
         <div className="flex items-center gap-2 text-[10px] font-mono text-gray-600">
           <Cpu size={10} className="text-gray-500" />
           <span>YOLOv8 · EntoSort · {nodeId}</span>

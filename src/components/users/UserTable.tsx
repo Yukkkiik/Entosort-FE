@@ -9,7 +9,7 @@ import {
   Wifi, WifiOff, User,
 } from "lucide-react";
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@/hooks/useUsers";
-import { useAssignPeternak, useRemovePeternak, useAssignAdmin, useRemoveAdmin } from "@/hooks/useUnit";
+import { useAssignOperator, useRemoveOperator, useAssignAdmin, useRemoveAdmin } from "@/hooks/useUnit";
 import { useCurrentUser } from "@/hooks/useAuth";
 import type { AppUser, CreateUserPayload, UpdateUserPayload } from "@/types/user";
 import { Avatar } from "./Avatar";
@@ -34,11 +34,11 @@ function SortIcon({ field, sortField, sortDir }: {
 }
 
 // ─── UnitBadge ────────────────────────────────────────────────────────────────
-// Menampilkan info unit dari peternakUnit (1 unit) atau adminUnits (banyak unit)
+// Menampilkan info unit dari operatorUnit (1 unit) atau adminUnits (banyak unit)
 
-function UnitBadge({ user, targetRole }: { user: AppUser; targetRole: "admin" | "peternak" }) {
-  if (targetRole === "peternak") {
-    const unit = user.peternakUnit;
+function UnitBadge({ user, targetRole }: { user: AppUser; targetRole: "admin" | "operator" }) {
+  if (targetRole === "operator") {
+    const unit = user.operatorUnit;
     if (!unit) {
       return (
         <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg font-medium">
@@ -108,8 +108,8 @@ export default function UserTable() {
   const createUser     = useCreateUser();
   const updateUser     = useUpdateUser();
   const deleteUser     = useDeleteUser();
-  const assignPeternak = useAssignPeternak();
-  const removePeternak = useRemovePeternak();
+  const assignOperator = useAssignOperator();
+  const removeOperator = useRemoveOperator();
   const assignAdmin    = useAssignAdmin();
   const removeAdmin    = useRemoveAdmin();
 
@@ -121,8 +121,8 @@ export default function UserTable() {
 
   // ── Filter berdasarkan role yang login ─────────────────────────────────────
 
-  const targetRole  = role === "superadmin" ? "admin" : "peternak";
-  const entityLabel = role === "superadmin" ? "Admin" : "Peternak";
+  const targetRole  = role === "superadmin" ? "admin" : "operator";
+  const entityLabel = role === "superadmin" ? "Admin" : "operator";
 
   const users = allUsers.filter((u) => {
     if (u.role !== targetRole) return false;
@@ -204,15 +204,15 @@ export default function UserTable() {
         await removeAdmin.mutateAsync(unitId);
       }
     } else {
-      // Peternak hanya 1 unit — cek apakah perlu swap
-      const currentUnitId = activeUser?.peternakUnit?.unitId ?? null;
+      // operator hanya 1 unit — cek apakah perlu swap
+      const currentUnitId = activeUser?.operatorUnit?.unitId ?? null;
       const newUnitId     = selectedUnits[0] ?? null;
 
       if (currentUnitId && currentUnitId !== newUnitId) {
-        await removePeternak.mutateAsync(currentUnitId);
+        await removeOperator.mutateAsync(currentUnitId);
       }
       if (newUnitId && newUnitId !== currentUnitId) {
-        await assignPeternak.mutateAsync({ unitId: newUnitId, payload: { peterId: userId } });
+        await assignOperator.mutateAsync({ unitId: newUnitId, payload: { operatorId: userId } });
       }
     }
 
@@ -253,8 +253,8 @@ export default function UserTable() {
   const isMutating =
     createUser.isPending    ||
     updateUser.isPending    ||
-    assignPeternak.isPending ||
-    removePeternak.isPending ||
+    assignOperator.isPending ||
+    removeOperator.isPending ||
     assignAdmin.isPending   ||
     removeAdmin.isPending;
 
@@ -358,7 +358,7 @@ export default function UserTable() {
                 <td colSpan={5} className="text-center py-16">
                   <div className="flex flex-col items-center gap-3">
                     <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center">
-                      {targetRole === "peternak"
+                      {targetRole === "operator"
                         ? <Tractor size={20} className="text-slate-300" />
                         : <User size={20} className="text-slate-300" />
                       }
@@ -393,7 +393,7 @@ export default function UserTable() {
                           }`}>
                           {targetRole === "admin"
                             ? <><User size={9} /> Admin</>
-                            : <><Tractor size={9} /> Peternak</>
+                            : <><Tractor size={9} /> Operator</>
                           }
                         </span>
                       </div>

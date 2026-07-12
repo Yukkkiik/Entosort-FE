@@ -50,7 +50,7 @@ function NodePills({ unit }: { unit: AppUnit }) {
 
   if (!esp32 && !rpi) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg font-medium">
+      <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg font-medium whitespace-nowrap">
         <Package size={11} />
         Belum ada node
       </span>
@@ -60,7 +60,7 @@ function NodePills({ unit }: { unit: AppUnit }) {
   return (
     <div className="flex flex-col gap-1">
       {esp32 && (
-        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border w-fit ${
+        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border w-fit whitespace-nowrap ${
           esp32.status === "online"
             ? "border-emerald-100 bg-emerald-50 text-emerald-700"
             : "border-slate-100 bg-slate-50 text-slate-400"
@@ -70,7 +70,7 @@ function NodePills({ unit }: { unit: AppUnit }) {
         </span>
       )}
       {rpi && (
-        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border w-fit ${
+        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border w-fit whitespace-nowrap ${
           rpi.status === "online"
             ? "border-emerald-100 bg-emerald-50 text-emerald-700"
             : "border-slate-100 bg-slate-50 text-slate-400"
@@ -117,7 +117,7 @@ export default function UnitTable() {
       (u.location  ?? "").toLowerCase().includes(search.toLowerCase()) ||
       (u.name      ?? "").toLowerCase().includes(search.toLowerCase()) ||
       (u.admin?.username    ?? "").toLowerCase().includes(search.toLowerCase()) ||
-      (u.peternak?.username ?? "").toLowerCase().includes(search.toLowerCase())
+      (u.operator?.username ?? "").toLowerCase().includes(search.toLowerCase())
     )
     .sort((a, b) => {
       if (!sortField || !sortDir) return 0;
@@ -221,13 +221,13 @@ export default function UnitTable() {
       <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white shadow-sm">
         <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
           <colgroup>
-            <col style={{ width: "22%" }} />
-            <col style={{ width: "10%" }} />
+            <col style={{ width: "17%" }} />
+            <col style={{ width: "9%" }} />
             <col style={{ width: "13%" }} />
             <col style={{ width: "16%" }} />
             <col style={{ width: "16%" }} />
+            <col style={{ width: "16%" }} />
             <col style={{ width: "13%" }} />
-            <col style={{ width: "10%" }} />
           </colgroup>
           <thead>
             <tr className="border-b border-slate-100">
@@ -293,7 +293,7 @@ export default function UnitTable() {
                 <tr key={unit.id} className="hover:bg-slate-50/70 transition-colors">
                   {/* Unit */}
                   <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3.5 pr-2">
                       <UnitAvatar unitId={unit.unitId} />
                       <div>
                         <p className="font-mono font-bold text-slate-800 text-sm leading-tight">
@@ -355,17 +355,17 @@ export default function UnitTable() {
                     )}
                   </td>
 
-                  {/* Peternak */}
+                  {/* operator */}
                   <td className="px-5 py-3.5">
-                    {unit.peternak ? (
+                    {unit.operator ? (
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full bg-lime-100 flex items-center justify-center flex-shrink-0">
                           <span className="text-[10px] font-bold text-lime-700">
-                            {unit.peternak.username[0].toUpperCase()}
+                            {unit.operator.username[0].toUpperCase()}
                           </span>
                         </div>
                         <span className="text-xs font-medium text-slate-700 truncate">
-                          {unit.peternak.username}
+                          {unit.operator.username}
                         </span>
                       </div>
                     ) : (

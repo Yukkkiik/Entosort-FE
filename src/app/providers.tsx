@@ -1,9 +1,10 @@
-// app/providers.tsx
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState } from "react";
+import { WebSocketProvider } from "@/contexts/WebSocketContext";
+import { GlobalNodeStatusSync } from "@/components/system/GlobalNodeStatusSync";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -11,7 +12,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 60 * 1000,     
+            staleTime: 60 * 1000,
             retry: 1,
           },
         },
@@ -20,7 +21,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <WebSocketProvider>
+        <GlobalNodeStatusSync />
+        {children}
+      </WebSocketProvider>
       {process.env.NODE_ENV === "development" && (
         <ReactQueryDevtools initialIsOpen={false} />
       )}

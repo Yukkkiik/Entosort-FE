@@ -1,4 +1,4 @@
-export type UserRole = "superadmin"|"admin" | "peternak";
+export type UserRole = "superadmin"|"admin" | "operator";
 
 export interface AuthUser {
   id: number;
@@ -26,4 +26,14 @@ export interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+}
+
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+}
+ 
+export interface ChangePasswordResponse {
+  success: boolean;
+  message: string;
 }

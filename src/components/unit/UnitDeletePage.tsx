@@ -64,9 +64,9 @@ export function UnitDeletePage({ unit, isPending, onConfirm, onBack }: Props) {
                     <User size={10} /> {unit.admin.username}
                   </span>
                 )}
-                {unit.peternak && (
+                {unit.operator && (
                   <span className="flex items-center gap-1 text-xs text-slate-400">
-                    <Tractor size={10} /> {unit.peternak.username}
+                    <Tractor size={10} /> {unit.operator.username}
                   </span>
                 )}
                 <span className="flex items-center gap-1 text-xs text-slate-400">

@@ -1,6 +1,6 @@
 // types/user.ts
 
-export type UserRole   = "superadmin" | "admin" | "peternak";
+export type UserRole   = "superadmin" | "admin" | "operator";
 export type NodeType   = "esp32" | "raspberry";
 export type NodeStatus = "online" | "offline";
 
@@ -15,7 +15,7 @@ export interface UserNode {
   lastSeen:  string | null;
 }
 
-// ─── Unit ringkas (dari relasi peternakUnit / adminUnits) ────────────────────
+// ─── Unit ringkas (dari relasi operatorUnit / adminUnits) ────────────────────
 
 export interface UserUnit {
   id:       number;
@@ -34,8 +34,8 @@ export interface AppUser {
   phone:        string;
   createdAt:    string;
   updatedAt:    string;
-  peternakUnit: UserUnit ;   // peternak: 1 unit saja
-  adminUnits:   UserUnit[];        // admin: bisa banyak unit
+  operatorUnit: UserUnit ;  
+  adminUnits:   UserUnit[];     
 }
 
 // ─── Payloads ─────────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ export interface CreateUserPayload {
   password:      string;
   role:          UserRole;
   phone:         string;
-  selectedUnits?: string[];  // unitId[] — opsional saat create
+  selectedUnits?: string[]; 
 }
 
 export interface UpdateUserPayload {
@@ -53,7 +53,7 @@ export interface UpdateUserPayload {
   password?:     string;
   role?:         UserRole;
   phone?:        string;
-  selectedUnits?: string[];  // re-assign unit
+  selectedUnits?: string[]; 
 }
 
 // ─── API responses ────────────────────────────────────────────────────────────

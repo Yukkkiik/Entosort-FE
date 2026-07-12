@@ -4,7 +4,7 @@ import type {
   AppUnit,
   CreateUnitPayload,
   UpdateUnitPayload,
-  AssignPeternakPayload,
+  AssignOperatorPayload,
   AssignAdminPayload,
 } from "@/types/unit";
 
@@ -44,19 +44,19 @@ export const unitApi = {
     await api.delete(`/api/units/${id}`);
   },
 
-  // POST /api/units/:unitId/assign-peternak — admin pemilik
-  assignPeternak: async (unitId: string, payload: AssignPeternakPayload): Promise<AppUnit> => {
+  // POST /api/units/:unitId/assign-operator — admin pemilik
+  assignOperator: async (unitId: string, payload: AssignOperatorPayload): Promise<AppUnit> => {
     const res = await api.post<ApiResponse<AppUnit>>(
-      `/api/units/${unitId}/assign-peternak`,
+      `/api/units/${unitId}/assign-operator`,
       payload
     );
     return res.data.data;
   },
 
-  // DELETE /api/units/:unitId/assign-peternak — admin pemilik
-  removePeternak: async (unitId: string): Promise<AppUnit> => {
+  // DELETE /api/units/:unitId/assign-operator — admin pemilik
+  removeOperator: async (unitId: string): Promise<AppUnit> => {
     const res = await api.delete<ApiResponse<AppUnit>>(
-      `/api/units/${unitId}/assign-peternak`
+      `/api/units/${unitId}/assign-operator`
     );
     return res.data.data;
   },

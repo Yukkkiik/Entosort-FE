@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { authApi } from "@/api/authApi";
 import { useAuthStore } from "@/lib/authStore";
-import type { LoginPayload } from "@/types/auth";
+import type { ChangePasswordPayload, LoginPayload } from "@/types/auth";
 
 // ─── useLogin ─────────────────────────────────────────────────────────────────
 
@@ -80,7 +80,15 @@ export function useCurrentUser() {
     role: user?.role ?? null,
     isAuthenticated,
     isAdmin: user?.role === "admin",
-    isFarmer: user?.role === "peternak",
+    isOperator: user?.role === "operator",
     isSuperAdmin: user?.role === 'superadmin'
   };
+}
+
+// ─── useChangePassword ───────────────────────────────────────────────────────────
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (payload: ChangePasswordPayload) =>
+      authApi.changePassword(payload),
+  });
 }

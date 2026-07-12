@@ -10,10 +10,11 @@ import {
   LogOut,
   Leaf,
   User,
+  UserCircle,
 } from "lucide-react";
 import { useCurrentUser, useLogout } from "@/hooks/useAuth";
 
-export type UserRole = "superadmin"|"admin" | "peternak";
+export type UserRole = "superadmin" | "admin" | "operator";
 
 interface NavItem {
   id: string;
@@ -34,28 +35,28 @@ const ALL_NAV_ITEMS: NavItem[] = [
     icon: <LayoutDashboard size={18} strokeWidth={2} />,
     label: "Dashboard",
     href: "/dashboard",
-    roles: ["admin", "peternak"],
+    roles: ["admin", "operator"],
   },
   {
     id: "control",
     icon: <Sliders size={18} strokeWidth={2} />,
     label: "Manual Control",
     href: "/dashboard/control",
-    roles: ["admin", "peternak"],
+    roles: ["admin", "operator"],
   },
   {
     id: "reports",
     icon: <BarChart3 size={18} strokeWidth={2} />,
     label: "Riwayat & Laporan",
     href: "/dashboard/reports",
-    roles: ["admin", "peternak"],
+    roles: ["admin", "operator"],
   },
   {
     id: "user",
     icon: <User size={18} strokeWidth={2} />,
     label: "Manajemen Pengguna",
     href: "/dashboard/user",
-    roles: ["superadmin","admin"],
+    roles: ["superadmin", "admin"],
   },
   {
     id: "calibration",
@@ -65,12 +66,20 @@ const ALL_NAV_ITEMS: NavItem[] = [
     badge: 2,
     roles: ["admin"],
   },
- {
-  id: "units",
-  icon: <Settings size={18} strokeWidth={2} />,
-  label: "Kalibrasi & Parameter Sistem",
-  href: "/dashboard/units",
-  roles: ["superadmin"],
+  {
+    id: "units",
+    icon: <Settings size={18} strokeWidth={2} />,
+    label: "Manajemen Unit",
+    href: "/dashboard/units",
+    roles: ["superadmin"],
+  },
+  // ── Profil — semua role, posisi setelah menu utama ──
+  {
+    id: "profile",
+    icon: <UserCircle size={18} strokeWidth={2} />,
+    label: "Profil Saya",
+    href: "/dashboard/profile",
+    roles: ["superadmin", "admin", "operator"],
   },
 ];
 
@@ -139,12 +148,12 @@ function NavButton({
 
 function RoleBadge({ role }: { role: UserRole }) {
   const config = {
-    superadmin: { label: "Superadmin", className: "bg-violet-100 text-violet-600" },
-    admin:      { label: "Admin",      className: "bg-blue-100 text-blue-600"     },
-    peternak:   { label: "Peternak",   className: "bg-lime-100 text-lime-700"     },
+    superadmin: { label: "SA",       className: "bg-violet-100 text-violet-600" },
+    admin:      { label: "Admin",    className: "bg-blue-100 text-blue-600"     },
+    operator:   { label: "Ops",      className: "bg-lime-100 text-lime-700"     },
   };
 
-  const { label, className } = config[role] ?? config.peternak;
+  const { label, className } = config[role] ?? config.operator;
 
   return (
     <div
@@ -164,33 +173,28 @@ function RoleBadge({ role }: { role: UserRole }) {
 
 export default function Sidebar({ onNavChange }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
+  const router   = useRouter();
   const { role } = useCurrentUser();
-  const logout = useLogout();
+  const logout   = useLogout();
 
-  const currentRole: UserRole = role ?? "peternak";
+  const currentRole: UserRole = role ?? "operator";
 
   const navItems = useMemo(
     () => ALL_NAV_ITEMS.filter((item) => item.roles.includes(currentRole)),
     [currentRole]
   );
 
-  // ← active sekarang dihitung dari pathname secara reaktif
-  // tidak pakai useState supaya selalu sinkron dengan URL
   const active = useMemo(() => {
-    // exact match dulu
-    const exact = navItems.find((i) => i.href === pathname);
+    const exact = ALL_NAV_ITEMS.find((i) => i.href === pathname);
     if (exact) return exact.id;
 
-    // partial match — cari path paling spesifik yang cocok
-    const partial = navItems
+    const partial = ALL_NAV_ITEMS
       .filter((i) => i.href && i.href !== "/dashboard" && pathname.startsWith(i.href))
       .sort((a, b) => (b.href?.length ?? 0) - (a.href?.length ?? 0))[0];
     if (partial) return partial.id;
 
-    // fallback ke dashboard
     return "dashboard";
-  }, [pathname, navItems]);
+  }, [pathname]);
 
   const handleNav = (item: NavItem) => {
     onNavChange?.(item.id);
@@ -223,6 +227,7 @@ export default function Sidebar({ onNavChange }: SidebarProps) {
 
       <div className="w-6 h-px bg-gray-100 my-1" />
 
+      {/* Semua nav items termasuk profile — konsisten pakai NavButton */}
       <nav className="flex flex-col gap-2.5" aria-label="Main navigation">
         {navItems.map((item) => (
           <NavButton
@@ -237,6 +242,7 @@ export default function Sidebar({ onNavChange }: SidebarProps) {
       <div className="flex-1" />
       <div className="w-6 h-px bg-gray-100 mb-1" />
 
+      {/* Logout */}
       <button
         aria-label="Log out"
         onClick={() => logout.mutate()}

@@ -2,7 +2,7 @@
 
 import type { NodeStatus, NodeType } from "./node";
 
-// ─── User ringkas (dari relasi admin/peternak di unit) ────────────────────────
+// ─── User ringkas (dari relasi admin/operator di unit) ────────────────────────
 
 export interface UnitUser {
   id:       number;
@@ -54,11 +54,11 @@ export interface AppUnit {
   location:  string | null;
   status:    UnitStatus;
   adminId:   number | null;
-  peterId:   number | null;
+  operatorId:   number | null;
   createdAt: string;
   updatedAt: string;
   admin:     UnitUser | null;
-  peternak:  UnitUser | null;
+  operator:  UnitUser | null;
   nodes:     UnitNode[];
   settings:  UnitSettings | null;
 }
@@ -78,8 +78,8 @@ export interface UpdateUnitPayload {
   status?:   UnitStatus;
 }
 
-export interface AssignPeternakPayload {
-  peterId: number;
+export interface AssignOperatorPayload {
+  operatorId: number;
 }
 
 export interface AssignAdminPayload {

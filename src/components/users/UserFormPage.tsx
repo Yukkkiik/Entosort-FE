@@ -29,7 +29,7 @@ const defaultForm = {
   phone: "",
 };
 
-type TargetRole = "admin" | "peternak";
+type TargetRole = "admin" | "operator";
 
 interface Props {
   editUser: AppUser | null;
@@ -48,7 +48,7 @@ interface Props {
 
   /**
    * superadmin → targetRole = "admin"
-   * admin      → targetRole = "peternak"
+   * admin      → targetRole = "operator"
    */
   targetRole?: TargetRole;
 }
@@ -71,9 +71,9 @@ export function UserFormPage({
   const isAdmin      = role === "admin";
 
   const resolvedTargetRole: TargetRole =
-    targetRole ?? (isSuperadmin ? "admin" : "peternak");
+    targetRole ?? (isSuperadmin ? "admin" : "operator");
 
-  const entityLabel    = resolvedTargetRole === "admin" ? "Admin" : "Peternak";
+  const entityLabel    = resolvedTargetRole === "admin" ? "Admin" : "operator";
   const entityLabelLow = entityLabel.toLowerCase();
 
   // ── Form state ─────────────────────────────────────────────────────────────
@@ -87,14 +87,14 @@ export function UserFormPage({
 
   // ── Unit assignment state ──────────────────────────────────────────────────
   // Admin: bisa pilih banyak unit (adminUnits[])
-  // Peternak: hanya 1 unit (peternakUnit)
+  // Peternak: hanya 1 unit (operatorUnit)
 
   const getInitialUnits = (): string[] => {
     if (!isEdit) return [];
     if (resolvedTargetRole === "admin") {
       return (editUser.adminUnits ?? []).map((u) => u.unitId);
     }
-    return editUser.peternakUnit ? [editUser.peternakUnit.unitId] : [];
+    return editUser.operatorUnit ? [editUser.operatorUnit.unitId] : [];
   };
 
   const [selectedUnits, setSelectedUnits] = useState<string[]>(getInitialUnits);
@@ -113,13 +113,13 @@ export function UserFormPage({
     }
 
     if (isAdmin) {
-      // Admin assign peternak ke unit miliknya: tampilkan unit milik admin ini
-      // yang belum punya peternak, atau sudah punya peternak = user yang diedit
+      // Admin assign operator ke unit miliknya: tampilkan unit milik admin ini
+      // yang belum punya operator, atau sudah punya operator = user yang diedit
       const milikAdmin      = String(unit.adminId) === String(currentUser?.id);
-      const belumAdaPeternak = unit.peterId == null;
-      const peternakIniSendiri =
-        isEdit && String(unit.peterId) === String(editUser?.id);
-      return milikAdmin && (belumAdaPeternak || peternakIniSendiri);
+      const belumAdaOperator = unit.operatorId == null;
+      const OperatorIniSendiri =
+        isEdit && String(unit.operatorId) === String(editUser?.id);
+      return milikAdmin && (belumAdaOperator || OperatorIniSendiri);
     }
 
     return false;
@@ -133,8 +133,8 @@ export function UserFormPage({
   // ── Unit toggle ────────────────────────────────────────────────────────────
 
   const toggleUnit = (unitId: string) => {
-    if (resolvedTargetRole === "peternak") {
-      // Peternak hanya boleh 1 unit
+    if (resolvedTargetRole === "operator") {
+      // operator hanya boleh 1 unit
       setSelectedUnits((prev) => (prev.includes(unitId) ? [] : [unitId]));
     } else {
       // Admin boleh banyak unit
@@ -318,7 +318,7 @@ export function UserFormPage({
                 <p className="text-sm font-semibold text-slate-800">Unit</p>
                 <p className="mt-0.5 text-xs text-slate-400">
                   Assign unit ke {entityLabelLow} ini
-                  {resolvedTargetRole === "peternak" && (
+                  {resolvedTargetRole === "operator" && (
                     <span className="ml-1 text-amber-500">(maks. 1)</span>
                   )}
                 </p>

@@ -13,7 +13,7 @@ export interface HarvestUser {
 
 export interface HarvestLog {
   id:            number;
-  unitId:        string;          // ← ganti dari nodeId
+  unitId:        string;      
   userId:        number | null;
   larvaCount:    number;
   prepupaCount:  number;
@@ -61,7 +61,7 @@ export interface HarvestStatsResponse {
 // ─── Filters & Payloads ───────────────────────────────────────────────────────
 
 export interface HarvestFilters {
-  unitId?: string;   // ← ganti dari nodeId
+  unitId?: string; 
   from?:   string;
   to?:     string;
   page?:   number;

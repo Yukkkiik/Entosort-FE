@@ -6,7 +6,7 @@ import { unitApi } from "@/api/unitApi";
 import type {
   CreateUnitPayload,
   UpdateUnitPayload,
-  AssignPeternakPayload,
+  AssignOperatorPayload,
   AssignAdminPayload,
 } from "@/types/unit";
 
@@ -102,11 +102,11 @@ export function useDeleteUnit() {
 
 // ─── useAssignPeternak — admin pemilik unit ───────────────────────────────────
 
-export function useAssignPeternak() {
+export function useAssignOperator() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ unitId, payload }: { unitId: string; payload: AssignPeternakPayload }) =>
-      unitApi.assignPeternak(unitId, payload),
+    mutationFn: ({ unitId, payload }: { unitId: string; payload: AssignOperatorPayload }) =>
+      unitApi.assignOperator(unitId, payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["units"] });
       qc.invalidateQueries({ queryKey: ["users"] });
@@ -116,10 +116,10 @@ export function useAssignPeternak() {
 
 // ─── useRemovePeternak — admin pemilik unit ───────────────────────────────────
 
-export function useRemovePeternak() {
+export function useRemoveOperator() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (unitId: string) => unitApi.removePeternak(unitId),
+    mutationFn: (unitId: string) => unitApi.removeOperator(unitId),
     onSuccess: async () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["units"] }),
