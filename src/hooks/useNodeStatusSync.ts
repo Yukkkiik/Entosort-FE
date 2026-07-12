@@ -23,7 +23,7 @@ export function useNodeStatusSync() {
 
   useEffect(() => {
     const unsubscribe = subscribe("node_status", (msg) => {
-      const payload = msg.data as NodeStatusPayload;
+      const payload = msg.payload as NodeStatusPayload;
       if (!payload?.unitId || !payload?.nodeType) return;
 
       // ── 1. Update cache "units" list (dipakai UnitTable) ──
