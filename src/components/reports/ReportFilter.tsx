@@ -54,7 +54,7 @@ export default function HarvestFilter({
             type="date"
             value={from}
             onChange={(e) => onFromChange(e.target.value)}
-            className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-lime-400 focus:ring-4 focus:ring-lime-100"
+            className="w-full rounded-2xl border text-gray-600 border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-lime-400 focus:ring-4 focus:ring-lime-100"
           />
         </label>
 
@@ -65,7 +65,7 @@ export default function HarvestFilter({
             type="date"
             value={to}
             onChange={(e) => onToChange(e.target.value)}
-            className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-lime-400 focus:ring-4 focus:ring-lime-100"
+            className="w-full rounded-2xl border text-gray-600 border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-lime-400 focus:ring-4 focus:ring-lime-100"
           />
         </label>
 
@@ -75,7 +75,7 @@ export default function HarvestFilter({
           <select
             value={unitId}
             onChange={(e) => onUnitChange(e.target.value)}
-            className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-lime-400 focus:ring-4 focus:ring-lime-100"
+            className="w-full rounded-2xl border text-gray-600 border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-lime-400 focus:ring-4 focus:ring-lime-100"
           >
             {/* Admin bisa pilih "Semua Unit", peternak tidak (hanya punya 1) */}
             {isAdmin && <option value="">Semua Unit</option>}

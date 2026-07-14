@@ -135,7 +135,7 @@ export default function LoginPage() {
                   value={form.username}
                   onChange={(e) => handleChange("username", e.target.value)}
                   disabled={login.isPending}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-green-700 focus:ring-4 focus:ring-green-100 disabled:opacity-50"
+                  className="w-full rounded-xl border text-gray-600 border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-green-700 focus:ring-4 focus:ring-green-100 disabled:opacity-50"
                 />
                 {errors.username && (
                   <p className="mt-2 text-sm text-red-500">{errors.username}</p>
@@ -155,7 +155,7 @@ export default function LoginPage() {
                     value={form.password}
                     onChange={(e) => handleChange("password", e.target.value)}
                     disabled={login.isPending}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 pr-12 text-sm outline-none transition focus:border-green-700 focus:ring-4 focus:ring-green-100 disabled:opacity-50"
+                    className="w-full rounded-xl border text-gray-600 border-gray-200 bg-white px-4 py-3 pr-12 text-sm outline-none transition focus:border-green-700 focus:ring-4 focus:ring-green-100 disabled:opacity-50"
                   />
                   <button
                     type="button"

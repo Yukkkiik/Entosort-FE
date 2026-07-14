@@ -45,7 +45,7 @@ function PasswordInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         autoComplete="new-password"
-        className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-11 text-sm outline-none transition-all focus:border-green-500 focus:ring-2 focus:ring-green-50"
+        className="w-full rounded-xl border text-gray-600 border-slate-200 py-2.5 pl-10 pr-11 text-sm outline-none transition-all focus:border-green-500 focus:ring-2 focus:ring-green-50"
       />
       <button
         type="button"
@@ -318,7 +318,7 @@ export default function ProfilePage() {
               <label htmlFor="current" className="block text-sm font-medium text-slate-700">
                 Password Saat Ini
               </label>
-              <PasswordInput id="current" value={currentPassword} onChange={setCurrentPassword} placeholder="Masukkan password saat ini" />
+              <PasswordInput id="current" value={currentPassword} onChange={setCurrentPassword} placeholder="Masukkan password saat ini"  />
             </div>
 
             <div className="h-px bg-slate-50" />

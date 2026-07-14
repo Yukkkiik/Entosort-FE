@@ -387,12 +387,12 @@ const teamSection = { ref: undefined, inView: true };
                 {item.label}
               </button>
             ))}
-            <button
-              onClick={() => handleNav("#features")}
-              className="mt-2 px-4 py-3 rounded-xl bg-lime-400 text-black text-sm font-bold"
+            <Link
+              href="/login"
+              className="mt-2 inline-flex items-center justify-center px-4 py-3 rounded-xl bg-lime-400 text-black text-sm font-bold active:scale-95 transition-all duration-200 text-center"
             >
               Get Started →
-            </button>
+            </Link>
           </div>
         </div>
       </header>
