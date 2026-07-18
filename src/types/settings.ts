@@ -18,6 +18,11 @@ export interface AppSettings {
   hsvUpperH:       number | null;
   hsvUpperS:       number | null;
   hsvUpperV:       number | null;
+  // RPi - Kalibrasi Fisik Kamera
+  camBrightness:   number | null;
+  camContrast:     number | null;
+  camExposure:     number | null;
+  camSharpness:    number | null;
   // Relasi
   unit?: {
     unitId: string;
@@ -41,6 +46,10 @@ export interface UpdateSettingsPayload {
   hsvUpperH?:       number;
   hsvUpperS?:       number;
   hsvUpperV?:       number;
+  camBrightness?:   number;
+  camContrast?:     number;
+  camExposure?:     number;
+  camSharpness?:    number;
 }
 
 // ─── API responses ────────────────────────────────────────────────────────────

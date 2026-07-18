@@ -7,7 +7,7 @@ import {
 
 interface WsMessage<T = unknown> {
   type:       string;
-  payload?:   T;       
+  data?:   T;       
   timestamp?: string;
 }
 

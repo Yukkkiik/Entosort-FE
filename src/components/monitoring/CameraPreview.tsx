@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Activity, Cpu, Zap, Radio, Eye } from "lucide-react";
+import { useWebSocket } from "@/contexts/WebSocketContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,198 +35,108 @@ interface WsStatusData {
   message?: string;
 }
 
-interface WsConnectedData {
-  message?: string;
-}
-
-type WsPayload = WsDetectionData | WsStatusData | WsConnectedData;
-
-interface WsMessage {
-  type:      string;
-  data:      WsPayload;
-  timestamp: string;
-}
 
 interface CameraPreviewProps {
   nodeId?: string;
-  wsUrl?: string;
   temperature?: number;
   speed?: number;
   onDetectionUpdate?: (data: {
-    larvaCount:    number;
-    prepupaCount:  number;
+    larvaCount: number;
+    prepupaCount: number;
     totalDetected: number;
     avgConfidence: number;
-    fps:           number;
+    fps: number;
   }) => void;
 }
 
-// Berapa lama (ms) frame deteksi ditahan sebelum boleh diganti raw frame
 const DETECTION_HOLD_MS  = 1500;
-// Berapa lama (ms) sebelum frame bbox di-reset paksa (koneksi putus / RPi lag)
 const DETECTION_RESET_MS = 3000;
 
 // ─── CameraPreview ────────────────────────────────────────────────────────────
 
 export default function CameraPreview({
   nodeId      = "rpi-node-01",
-  wsUrl       = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:3001",
   temperature = 28,
   speed       = 15,
   onDetectionUpdate,
 }: CameraPreviewProps) {
+  const { isConnected, subscribe } = useWebSocket();
 
-  const [scanPos,     setScanPos]     = useState(0);
-  const [frameCount,  setFrameCount]  = useState(0);
-  const [pulseRing,   setPulseRing]   = useState(false);
-  const [wsConnected, setWsConnected] = useState(false);
-  const [aiStatus,    setAiStatus]    = useState<"running" | "stopped" | "error" | "waiting">("waiting");
-  const [aiData,      setAiData]      = useState<AiDetection | null>(null);
-  const [liveFps,     setLiveFps]     = useState<number>(0);
-  const [frameB64,    setFrameB64]    = useState<string | null>(null);
+  const [scanPos,    setScanPos]    = useState(0);
+  const [frameCount, setFrameCount] = useState(0);
+  const [pulseRing,  setPulseRing]  = useState(false);
+  const [aiStatus,   setAiStatus]   = useState<"running" | "stopped" | "error" | "waiting">("waiting");
+  const [aiData,     setAiData]     = useState<AiDetection | null>(null);
+  const [liveFps,    setLiveFps]    = useState(0);
+  const [frameB64,   setFrameB64]   = useState<string | null>(null);
 
-  // ── FIX 1: Simpan callback di ref agar tidak trigger reconnect WS ──────────
-  // onDetectionUpdate adalah fungsi baru setiap render DashboardPage →
-  // kalau masuk dependency array useEffect WS, WS reconnect terus-menerus.
   const onDetectionRef = useRef(onDetectionUpdate);
-  useEffect(() => {
-    onDetectionRef.current = onDetectionUpdate;
-  }, [onDetectionUpdate]);
+  useEffect(() => { onDetectionRef.current = onDetectionUpdate; }, [onDetectionUpdate]);
 
-  // Timestamp terakhir kali frame dengan deteksi diterima
-  const lastDetectionFrameAt = useRef<number>(0);
-
-  // ── FIX 2: Timer untuk reset paksa frame bbox yang stuck ──────────────────
-  // Kalau RPi tidak kirim frame baru setelah DETECTION_RESET_MS (misal lag /
-  // koneksi putus sesaat), frame bbox lama tidak akan stuck selamanya.
-  const detectionHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const wsRef = useRef<WebSocket | null>(null);
+  const lastDetectionFrameAt = useRef(0);
+  const detectionHoldTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── WebSocket ──────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!wsUrl) return;
+useEffect(() => {
+    const unsubDetection = subscribe("ai:detection", (msg) => {
+      const data = msg.data as WsDetectionData;
+      if (!data) return;
 
-    let destroyed = false;
+      const hasDetections = data.detections && data.detections.length > 0;
+      const now = Date.now();
 
-    const connect = () => {
-      if (destroyed) return;
+      setAiData(data);
+      setAiStatus("running");
+      if (data.fps != null) setLiveFps(data.fps);
 
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
+      if (data.frame) {
+        if (hasDetections) {
+          lastDetectionFrameAt.current = now;
+          setFrameB64(data.frame);
+          setFrameCount((c) => c + 1);
 
-      ws.onopen = () => {
-        if (destroyed) { ws.close(); return; }
-        setWsConnected(true);
-        console.log("[WS] Connected ke backend");
-      };
-
-      ws.onclose = () => {
-        setWsConnected(false);
-        setAiStatus("stopped");
-        if (!destroyed) setTimeout(connect, 3000);
-      };
-
-      ws.onerror = (e) => console.error("[WS] Error:", e);
-
-      ws.onmessage = (e) => {
-        if (destroyed) return;
-        try {
-          const msg: WsMessage = JSON.parse(e.data as string);
-
-          // ── ai:detection ────────────────────────────
-          if (msg.type === "ai:detection") {
-            const data = msg.data as WsDetectionData;
-            const hasDetections = data.detections && data.detections.length > 0;
-            const now = Date.now();
-
-            setAiData(data);
-            setAiStatus("running");
-            if (data.fps != null) setLiveFps(data.fps);
-
-            if (data.frame) {
-              if (hasDetections) {
-                // Frame ada bbox — selalu tampilkan dan catat waktu
-                lastDetectionFrameAt.current = now;
-                setFrameB64(data.frame);
-                setFrameCount((c) => c + 1);
-
-                // ── FIX 2: Reset timer paksa setiap kali ada deteksi baru ──
-                if (detectionHoldTimer.current) {
-                  clearTimeout(detectionHoldTimer.current);
-                }
-                detectionHoldTimer.current = setTimeout(() => {
-                  // Paksa accept raw frame setelah DETECTION_RESET_MS
-                  // tanpa perlu nunggu elapsed >= DETECTION_HOLD_MS
-                  lastDetectionFrameAt.current = 0;
-                }, DETECTION_RESET_MS);
-
-              } else {
-                // Frame raw (tidak ada deteksi) — hanya tampilkan kalau
-                // sudah cukup lama sejak frame deteksi terakhir
-                const elapsed = now - lastDetectionFrameAt.current;
-                if (elapsed >= DETECTION_HOLD_MS) {
-                  setFrameB64(data.frame);
-                  setFrameCount((c) => c + 1);
-                }
-                // Kalau belum lewat DETECTION_HOLD_MS, skip — frame bbox tetap tampil
-              }
-            }
-
-            // ── FIX 1: Panggil via ref, bukan langsung ───────────────────
-            onDetectionRef.current?.({
-              larvaCount:    data.detections.filter(d => d.class === "larva").length,
-              prepupaCount:  data.detections.filter(d => d.class === "prepupa").length,
-              totalDetected: data.detections.length,
-              avgConfidence: data.detections.length
-                ? Math.round(
-                    data.detections.reduce((s, d) => s + d.confidence, 0) /
-                    data.detections.length * 100
-                  )
-                : 0,
-              fps: data.fps ?? 0,
-            });
-            return;
+          if (detectionHoldTimer.current) clearTimeout(detectionHoldTimer.current);
+          detectionHoldTimer.current = setTimeout(() => {
+            lastDetectionFrameAt.current = 0;
+          }, DETECTION_RESET_MS);
+        } else {
+          const elapsed = now - lastDetectionFrameAt.current;
+          if (elapsed >= DETECTION_HOLD_MS) {
+            setFrameB64(data.frame);
+            setFrameCount((c) => c + 1);
           }
-
-          // ── ai:status ───────────────────────────────
-          if (msg.type === "ai:status") {
-            const data = msg.data as WsStatusData;
-            setAiStatus(data.status ?? "waiting");
-            return;
-          }
-
-          // ── connected handshake ─────────────────────
-          if (msg.type === "connected") {
-            const data = msg.data as WsConnectedData;
-            console.log("[WS] Server ready:", data.message);
-            return;
-          }
-
-        } catch (err) {
-          console.warn("[WS] Parse error:", err);
         }
-      };
-    };
+      }
 
-    connect();
+      onDetectionRef.current?.({
+        larvaCount:    data.detections.filter((d) => d.class === "larva").length,
+        prepupaCount:  data.detections.filter((d) => d.class === "prepupa").length,
+        totalDetected: data.detections.length,
+        avgConfidence: data.detections.length
+          ? Math.round(data.detections.reduce((s, d) => s + d.confidence, 0) / data.detections.length * 100)
+          : 0,
+        fps: data.fps ?? 0,
+      });
+    });
+
+    const unsubStatus = subscribe("ai:status", (msg) => {
+      const data = msg.data as WsStatusData;
+      setAiStatus(data?.status ?? "waiting");
+    });
 
     return () => {
-      destroyed = true;
-      // Bersihkan timer saat unmount
+      unsubDetection();
+      unsubStatus();
       if (detectionHoldTimer.current) clearTimeout(detectionHoldTimer.current);
-      wsRef.current?.close();
     };
-  // ── FIX 1: Hanya wsUrl di dependency — onDetectionUpdate TIDAK masuk sini ─
-  }, [wsUrl]);
+  }, [subscribe]);
 
-  // ── Scan line animation ────────────────────────────────────────────────────
+  // ── Scan line & pulse ring animation tetap sama persis ──────────────────
   useEffect(() => {
     const id = setInterval(() => setScanPos((p) => (p >= 100 ? 0 : p + 0.4)), 16);
     return () => clearInterval(id);
   }, []);
 
-  // ── Pulse ring ─────────────────────────────────────────────────────────────
   useEffect(() => {
     const id = setInterval(() => {
       setPulseRing(true);
@@ -233,6 +144,8 @@ export default function CameraPreview({
     }, 2500);
     return () => clearInterval(id);
   }, []);
+
+  const wsConnected = isConnected;
 
   // ── Derived state ──────────────────────────────────────────────────────────
   const totalDetected = aiData?.detections.length ?? 0;

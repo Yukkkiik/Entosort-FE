@@ -9,16 +9,16 @@ import type { UpdateSettingsPayload } from "@/types/settings";
 
 export const SETTINGS_KEYS = {
   all:    ["settings", "all"] as const,
-  byUnit: (unitId: string) => ["settings", unitId] as const,
+  byUnit: (nodeId: string) => ["settings", nodeId] as const,
 };
 
 // ─── useSettings — settings satu unit ────────────────────────────────────────
 
-export function useSettings(unitId?: string) {
+export function useSettings(nodeId?: string) {
   return useQuery({
-    queryKey:  SETTINGS_KEYS.byUnit(unitId!),
-    queryFn:   () => settingsApi.getByUnit(unitId!),
-    enabled:   !!unitId,
+    queryKey:  SETTINGS_KEYS.byUnit(nodeId!),
+    queryFn:   () => settingsApi.getByUnit(nodeId!),
+    enabled:   !!nodeId,
     staleTime: 30_000,
   });
 }

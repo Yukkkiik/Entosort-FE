@@ -31,7 +31,7 @@ interface MachineComponent {
 const MACHINE_COMPONENTS: MachineComponent[] = [
   {
     id:            "motor_conveyor",
-    title:         "Motor Conveyor",
+    title:         "Vibration",
     description:   "Main belt drive transporting larva trays through the sorting pipeline at variable speed.",
     icon:          <Cog size={20} strokeWidth={2} />,
     detail:        "Running at 15 mm/s",
@@ -39,7 +39,7 @@ const MACHINE_COMPONENTS: MachineComponent[] = [
   },
   {
     id:            "sorting_servo",
-    title:         "Sorting Servo",
+    title:         "Selonoid push",
     description:   "Precision actuator physically separating classified larvae into target output channels.",
     icon:          <Zap size={20} strokeWidth={2} />,
     detail:        "Actuating @ 60 Hz",

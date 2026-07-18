@@ -3,14 +3,17 @@
 import { useState, useCallback } from "react";
 import CameraPreview from "@/components/monitoring/CameraPreview";
 import MetricCard from "@/components/monitoring/MetricCard";
+import UnitSelector from "@/components/control/unitSelector";
 import { useSetHeader } from "@/components/layout/HeaderContext";
 import RoleGuard from "@/lib/RoleGuard";
 import { useUnits } from "@/hooks/useUnit";
 import { useHarvestLogs } from "@/hooks/useHarvest";
+import { useSensorLatest } from "@/hooks/useSensor";
+import type { UnitNode } from "@/types/unit";
 import {
   CheckCircle2, AlertCircle, Info,
   ArrowUpRight, SlidersHorizontal, ChevronRight,
-  Download, RotateCcw, ChevronDown, Wifi, WifiOff,
+  Download, RotateCcw, Wifi, WifiOff,
   Bug, Sprout, FileWarning, ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
@@ -23,7 +26,6 @@ interface SortRecord {
   color: string;
   pct:   number;
 }
-
 
 // ─── SortHistoryBar ───────────────────────────────────────────────────────────
 
@@ -108,60 +110,40 @@ function ActivityRow({ log }: {
   );
 }
 
-// ─── UnitSelector ─────────────────────────────────────────────────────────────
-
-function UnitSelector({
-  units,
-  selectedId,
-  onChange,
-}: {
-  units: { unitId: string; name?: string | null; status?: string | null }[];
-  selectedId: string;
-  onChange: (id: string) => void;
-}) {
-  const selected = units.find((u) => u.unitId === selectedId);
-  const status   = selected?.status ?? null;
-
-  return (
-    <div className="relative inline-flex items-center gap-2">
-      <select
-        value={selectedId}
-        onChange={(e) => onChange(e.target.value)}
-        className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-gray-200 bg-white text-xs font-semibold text-gray-700 shadow-sm hover:border-lime-300 focus:outline-none focus:ring-2 focus:ring-lime-300 transition-all cursor-pointer"
-      >
-        {units.map((u) => (
-          <option key={u.unitId} value={u.unitId}>
-            {u.unitId}{u.name ? ` — ${u.name}` : ""}
-          </option>
-        ))}
-      </select>
-      <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2">
-        <ChevronDown size={11} className="text-gray-400" />
-      </div>
-      {selected && (
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold
-          ${status === "online"
-            ? "bg-lime-50 text-lime-700 border border-lime-200"
-            : "bg-gray-100 text-gray-500 border border-gray-200"
-          }`}
-        >
-          {status === "online" ? <Wifi size={9} /> : <WifiOff size={9} />}
-          {status ?? "—"}
-        </span>
-      )}
-    </div>
-  );
-}
-
 // ─── Dashboard Page ───────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const { units, isLoading: unitsLoading } = useUnits();
   const [selectedUnitId, setSelectedUnitId] = useState<string>("");
   const resolvedUnitId = selectedUnitId || units[0]?.unitId || "";
+
+  const selectedUnit = units.find((u) => u.unitId === resolvedUnitId);
+  const raspiNode: UnitNode | undefined = selectedUnit?.nodes?.find(
+    (n) => n.nodeType === "raspberry"   
+  );
+
+  const handleUnitChange = useCallback((id: string) => {
+    setSelectedUnitId(id);
+  }, []);
+
   const [liveDetection, setLiveDetection] = useState({
     larvaCount: 0, prepupaCount: 0, totalDetected: 0, avgConfidence: 0, fps: 0,
   });
+  const { data: sensorResponse } = useSensorLatest(
+    resolvedUnitId? { unitId: resolvedUnitId } : {},
+    5000
+  );
+
+  const currentTemp = sensorResponse?.temperature ?? 0;
+  const currentHum = sensorResponse?.humidity ?? 0;
+
+  const tempFill = Math.min(Math.max((currentTemp / 40) * 100, 0), 100); // Batas grafik 40°C
+  const humFill = Math.min(Math.max(currentHum, 0), 100);
+
+  const tempTrend = currentTemp >= 24 && currentTemp <= 28 ? "stable" : currentTemp > 28 ? "up" : "down";
+  const humTrend = currentHum <= 75 ? "stable" : "up";
+  const tempTrendValue = tempTrend === "stable" ? "±0.3" : tempTrend === "up" ? "+0.5" : "-0.5";
+  const humTrendValue = humTrend === "stable" ? "Stable" : "Overlimit";
 
   const handleDetectionUpdate = useCallback((data: {
     larvaCount:    number;
@@ -209,7 +191,14 @@ export default function DashboardPage() {
     ? logsData.slice(0, 5)
     : (logsData?.data ?? []).slice(0, 5);
 
-  const selectedUnit = units.find((u) => u.unitId === resolvedUnitId);
+  const totalPrepupa = recentLogs.reduce((sum, log) => sum + log.prepupaCount, 0);
+  const totalLarva = recentLogs.reduce((sum, log) => sum + log.larvaCount, 0);
+
+  const prepupaTargetMax = 200;
+  const larvaTargetMax = 200;
+
+  const prepupaFillPct = Math.min(Math.max((totalPrepupa / prepupaTargetMax ) * 100, 0), 100);
+  const larvaFillPct = Math.min(Math.max((totalLarva / larvaTargetMax) * 100, 0), 100);
 
   useSetHeader({
     titleIcon: "🖥️",
@@ -264,29 +253,24 @@ export default function DashboardPage() {
 
           <div className="max-w-[1280px] mx-auto pb-16">
 
-            {/* ── Unit Selector Bar ── */}
+            {/* ── Unit Selector — kini menampilkan node Raspberry Pi ── */}
             {!unitsLoading && units.length > 0 && (
-              <div className="mb-5 flex items-center gap-3 p-4 rounded-2xl bg-white border border-gray-100 shadow-sm">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
-                  Unit Aktif
-                </span>
+              <div className="mb-5">
                 <UnitSelector
                   units={units}
-                  selectedId={resolvedUnitId}
-                  onChange={(id) => setSelectedUnitId(id)}
+                  selectedUnitId={resolvedUnitId}
+                  node={raspiNode}
+                  nodeLabel="Unit Aktif (Raspberry Pi)"
+                  onChange={handleUnitChange}
+                  animationDelay={0}
                 />
-                {selectedUnit && (
-                  <span className="ml-auto text-[11px] text-gray-400 font-mono">
-                    {selectedUnit.unitId}
-                  </span>
-                )}
               </div>
             )}
 
             {/* ── Camera + right panel ── */}
             <div className="grid xl:grid-cols-[1fr_300px] gap-5 mb-5">
               <CameraPreview
-                nodeId={resolvedUnitId}
+                nodeId={raspiNode?.nodeId ?? resolvedUnitId}
                 onDetectionUpdate={handleDetectionUpdate}
               />
 
@@ -325,7 +309,7 @@ export default function DashboardPage() {
                   ))}
                 </div>
 
-                {/* ── FIX 3: Target FPS realistis untuk RPi (15, bukan 30) ── */}
+                {/* Target FPS realistis untuk RPi (15, bukan 30) ── */}
                 <div className="mt-auto pt-3 border-t border-gray-50">
                   <div className="flex justify-between text-[11px] font-semibold text-gray-500 mb-1.5">
                     <span>FPS</span>
@@ -344,10 +328,46 @@ export default function DashboardPage() {
 
             {/* ── Metric cards ── */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-              <MetricCard variant="temperature" title="Temperature" value={25} unit="°C" trend="stable" trendValue="±0.3" subtitle="Optimal range: 24–28°C" fill={62} animationDelay={300} />
-              <MetricCard variant="humidity" title="Humidity" value={70} unit="%" trend="up" trendValue="+2.1%" subtitle="Monitor: max 75%" fill={70} animationDelay={400} />
-              <MetricCard variant="prepupa" title="Total Prepupa" value={142} trend="up" trendValue="+18" subtitle="This batch cycle" fill={71} animationDelay={500} />
-              <MetricCard variant="larva" title="Total Larva" value={56} trend="down" trendValue="−12" subtitle="Remaining in bin" fill={28} animationDelay={600} />
+              <MetricCard 
+                variant="temperature" 
+                title="Temperature" 
+                value={Number(currentTemp.toFixed(1))} 
+                unit="°C" 
+                trend={tempTrend} 
+                trendValue={tempTrendValue} 
+                subtitle="Optimal range: 24-28°C"  
+                fill={Math.round(tempFill)}
+                animationDelay={300} 
+              />
+              <MetricCard 
+                variant="humidity" 
+                title="Humidity" 
+                value={Number(currentHum.toFixed(1))} 
+                unit="%" 
+                trend={humTrend} 
+                trendValue={humTrendValue} 
+                subtitle="Monitor: max 75%" 
+                fill={Math.round(humFill)} 
+                animationDelay={400} 
+              />
+              <MetricCard 
+                variant="prepupa" 
+                title="Total Prepupa" 
+                value={totalPrepupa} 
+                trend={totalPrepupa > 1 ? "up" : "down"} 
+                trendValue={`+${totalPrepupa > 0 ? totalPrepupa : 0}`} 
+                subtitle="This batch cycle" 
+                fill={Math.round(prepupaFillPct)} 
+                animationDelay={500} />
+              <MetricCard 
+                variant="larva" 
+                title="Total Larva" 
+                value={totalLarva} 
+                trend={totalLarva > 1 ? "up" : "down"} 
+                trendValue={`+${totalLarva > 0 ? totalLarva : 0}`} 
+                subtitle="Remaining in bin" 
+                fill={Math.round(larvaFillPct)} 
+                animationDelay={600} />
             </div>
 
             {/* ── Bottom row: activity live + system health ── */}

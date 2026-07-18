@@ -8,7 +8,12 @@ import type { AppUnit, UnitNode } from "@/types/unit";
 interface Props {
   units:           AppUnit[];
   selectedUnitId:  string;
+  /** Node yang ditampilkan di info chip — ESP32, RPi, atau node lain */
+  node?:           UnitNode | null;
+  /** @deprecated pakai `node` — tetap didukung supaya Control page lama tidak perlu diubah */
   esp32Node?:      UnitNode | null;
+  /** Label di header card, mis. "Target Unit (Raspberry Pi)" */
+  nodeLabel?:      string;
   onChange:        (unitId: string) => void;
   animationDelay?: number;
 }
@@ -16,7 +21,9 @@ interface Props {
 export default function UnitSelector({
   units,
   selectedUnitId,
+  node,
   esp32Node,
+  nodeLabel = "Target Unit (ESP32)",
   onChange,
   animationDelay = 0,
 }: Props) {
@@ -25,8 +32,9 @@ export default function UnitSelector({
   const buttonRef   = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const activeNode   = node ?? esp32Node;
   const selectedUnit = units.find((u) => u.unitId === selectedUnitId);
-  const isOnline     = esp32Node?.status === "online";
+  const isOnline     = activeNode?.status === "online";
 
   // Hitung posisi dropdown berdasarkan posisi button di viewport
   const updatePosition = useCallback(() => {
@@ -81,7 +89,7 @@ export default function UnitSelector({
         <div className="flex items-center gap-2 mb-4">
           <Cpu size={15} strokeWidth={2} className="text-lime-600" />
           <span className="text-xs font-extrabold text-gray-500 uppercase tracking-widest">
-            Target Unit (ESP32)
+            {nodeLabel}
           </span>
         </div>
 
@@ -171,14 +179,14 @@ export default function UnitSelector({
             )}
           </div>
 
-          {/* ── ESP32 info chips ── */}
+          {/* ── Node info chips ── */}
           {selectedUnit && (
             <div className="flex flex-wrap items-center gap-3">
-              {esp32Node && (
+              {activeNode && (
                 <div className="flex items-center gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2">
                   <Cpu size={13} strokeWidth={2} className="text-slate-500" />
                   <span className="text-xs font-mono font-semibold text-slate-700">
-                    {esp32Node.nodeId}
+                    {activeNode.nodeId}
                   </span>
                 </div>
               )}
@@ -196,11 +204,11 @@ export default function UnitSelector({
                 }
               </div>
 
-              {esp32Node?.firmware && (
+              {activeNode?.firmware && (
                 <div className="flex items-center gap-1.5 rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
                   <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">FW</span>
                   <span className="text-xs font-mono font-semibold text-gray-600">
-                    {esp32Node.firmware}
+                    {activeNode.firmware}
                   </span>
                 </div>
               )}
@@ -221,7 +229,7 @@ export default function UnitSelector({
         {selectedUnit && !isOnline && (
           <p className="mt-3 text-xs font-semibold text-amber-600 flex items-center gap-1.5">
             <WifiOff size={12} strokeWidth={2.5} />
-            ESP32 unit ini sedang offline — perintah kontrol mungkin tidak terkirim.
+            Node ini sedang offline — perintah mungkin tidak terkirim.
           </p>
         )}
       </div>
